@@ -11,8 +11,8 @@ import os
 import sys
 import pickle
 
-sys.path.insert(0, '/home/arpit/Projects/Bayesian-neural-transfer-learning/preliminary/Iris/')
-sys.path.insert(0, '/home/arpit/Projects/Bayesian-neural-transfer-learning/preliminary/WineQualityDataset/preprocess')
+sys.path.insert(0, '../datasets/Iris/')
+sys.path.insert(0, '../datasets/WineQualityDataset/preprocess')
 
 from preprocess import getdata
 
@@ -400,7 +400,7 @@ if __name__ == '__main__':
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
     plt.title('Wine Quality-Red Accuracy plot')
-    plt.savefig('accuracy-red-train.png')
+    plt.savefig('results/accuracy-red-train.png')
 
     plt.clf()
 
@@ -412,4 +412,4 @@ if __name__ == '__main__':
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
     plt.title('Wine Quality-Red Accuracy plot')
-    plt.savefig('accuracy-red-test.png')
+    plt.savefig('results/accuracy-red-test.png')
