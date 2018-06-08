@@ -11,9 +11,11 @@ import math
 import os
 import sys
 import pickle
+from sklearn.preprocessing import normalize
+from sklearn.preprocessing import StandardScaler
 
 
-sys.path.insert(0, '/home/arpit/Projects/Bayesian-neural-transfer-learning/preliminary/Iris/')
+sys.path.insert(0, './datasets/Iris/')
 from preprocess_iris import getdata
 
 def convert_time(secs):
@@ -213,12 +215,12 @@ class MCMC:
         rmse = self.rmse(fx, y)
         prob = self.softmax(fx)
         # print prob.shape
-        # loss = -0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq
+        # loss = np.sum(-0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq)
         loss = 0
         for i in range(y.shape[0]):
             for j in range(y.shape[1]):
                 if y[i, j] == 1:
-                    loss += np.log(prob[i, j])
+                    loss += np.log(prob[i, j] + 0.0001)
 
         out = np.argmax(fx, axis=1)
         y_out = np.argmax(y, axis=1)
@@ -335,7 +337,7 @@ class MCMC:
                 w = w_proposal
                 eta = eta_pro
 
-                print i, trainacc
+                print i, trainacc, rmsetrain
 
                 # print  i, likelihood, prior_likelihood, rmsetrain, rmsetest, 'accepted: ', naccept , trainacc, testacc
                 # print pred_train.shape
@@ -393,7 +395,7 @@ if __name__ == '__main__':
 
 
     input = 4
-    hidden = 6
+    hidden = 16
     output = 3
     topology = [input, hidden, output]
     # print(traindata.shape, testdata.shape)
@@ -403,7 +405,22 @@ if __name__ == '__main__':
     etol = 0.6
     alpha = 0.1
 
-    traindata, testdata = getdata('Iris/iris.csv', input)
+    traindata, testdata = getdata('./datasets/Iris/iris.csv', input)
+    # traindata = np.genfromtxt('./datasets/Cancer/ftrain.txt')
+    # testdata = np.genfromtxt('./datasets/Cancer/ftest.txt')
+
+    # sc_X = StandardScaler()
+    # x1 = sc_X.fit_transform(traindata[:, :input])
+    # traindata[:, :input] = normalize(x1, norm='l2')
+    #
+    # x1 = sc_X.fit_transform(testdata[:, :input])
+    # testdata[:, :input] = normalize(x1, norm='l2')
+
+
+    print(traindata)
+
+    print("\n\n")
+    print(testdata)
 
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
@@ -442,7 +459,7 @@ if __name__ == '__main__':
     print train_acc, test_acc
     print "\n\n\n"
     print "Train accuracy:\n"
-    print train_acc
+    # print train_acc
     print "Mean: "+ str(np.mean(train_acc))
     print "Test accuracy:\n"
     print "Mean: "+ str(np.mean(test_acc))
@@ -468,8 +485,8 @@ if __name__ == '__main__':
 
     plt.xlabel('Samples')
     plt.ylabel('Accuracy')
-    plt.title('Iris Accuracy plot')
-    plt.savefig('accuracy-iris-mcmc.png')
+    plt.title('Breast Tissue Accuracy plot')
+    plt.savefig('accuracy-iris-mcmc-3.png')
 
     plt.clf()
 

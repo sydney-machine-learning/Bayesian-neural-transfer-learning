@@ -10,6 +10,8 @@ import math
 import os
 import sys
 import pickle
+from sklearn.preprocessing import normalize
+from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, '../datasets/Iris/')
 sys.path.insert(0, '../datasets/WineQualityDataset/preprocess')
@@ -86,9 +88,9 @@ class Network:
 
         # self.W3 += (self.hidout2.T.dot(out_delta) * self.lrate)
         # self.B3 += (-1 * self.lrate * out_delta)
-        self.W2 += (self.hidout.T.dot(out_delta) * self.lrate)
+        self.W2 += (self.hidout.T.dot(out_delta) * self.lrate - self.alpha/self.TrainData.shape[0] * self.W2)
         self.B2 += (-1 * self.lrate * out_delta)
-        self.W1 += (Input.T.dot(hid_delta) * self.lrate)
+        self.W1 += (Input.T.dot(hid_delta) * self.lrate - self.alpha/self.TrainData.shape[0] * self.W1)
         self.B1 += (-1 * self.lrate * hid_delta)
 
         # layer = 1  # hidden to output
@@ -277,7 +279,7 @@ class Network:
             mse_lis.append(bestmse)
             mad_lis.append(bestmad)
 
-            if epoch%10 == 0:
+            if epoch%1 == 0:
                 sse, acc = self.TestNetwork(phase=1, erTolerance=etol)
                 test_acc.append(acc)
                 test_sse.append(sse)
@@ -321,95 +323,119 @@ def pickle_knowledge(obj, pickle_file):
 
 # --------------------------------------------------------------------------
 if __name__ == '__main__':
-    input = 11
-    hidden = 94
-    output = 4
+    input = 9
+    hidden = 10
+    output = 6
     topo = [input, hidden, output]
     # print(traindata.shape, testdata.shape)
     lrate = 0.67
     etol_tr = 0.2
     etol = 0.6
-    alpha = 0.1
+    alpha = 0.0015
 
     minepoch = 0
     maxepoch = 500
 
-    #
+
     # traindata, testdata = getdata('WineQualityDataset/winequality-white.csv')
     # y_train = traindata[:, input:]
     # y_test = testdata[:, input:]
 
-    # # Source Dataset Network
-    # network_white = Network(Topo=topo, Train=traindata, Test=testdata, learn_rate =lrate, alpha=alpha)
-    # print("\nWine Quality White (Source):")
-    # train_acc, test_acc = network_white.BP_GD(stocastic=False, vanilla=1, depth=1500)
-    #
-    # print "\nTrain Data performance: "
-    # sse, acc = network_white.TestNetwork(phase=0, erTolerance=etol_tr)
-    # print("sse: "+ str(sse) + " acc: "+ str(acc))
-    # print "Test Data performance: "
-    # sse, acc = network_white.TestNetwork(phase=1, erTolerance=etol)
-    # print("sse: " + str(sse) + " acc: " + str(acc))
+    traindata = np.genfromtxt('../datasets/BreastTissue/train.txt')
+    testdata = np.genfromtxt('../datasets/BreastTissue/test.txt')
+
+    sc_X = StandardScaler()
+    x1 = sc_X.fit_transform(traindata[:, :input])
+    traindata[:, :input] = normalize(x1, norm='l2')
+
+    x1 = sc_X.fit_transform(testdata[:, :input])
+    testdata[:, :input] = normalize(x1, norm='l2')
+
+
+    # Source Dataset Network
+    network_white = Network(Topo=topo, Train=traindata, Test=testdata, learn_rate =lrate, alpha=alpha)
+    print("\nWine Quality White (Source):")
+    train_acc, test_acc = network_white.BP_GD(stocastic=False, vanilla=1, depth=5000)
+
+    print "\nTrain Data performance: "
+    sse, acc = network_white.TestNetwork(phase=0, erTolerance=etol_tr)
+    print("sse: "+ str(sse) + " acc: "+ str(acc))
+    print "Test Data performance: "
+    sse, acc = network_white.TestNetwork(phase=1, erTolerance=etol)
+    print("sse: " + str(sse) + " acc: " + str(acc))
+
+
+    plt.plot(range(0, 5000, 1), train_acc, '.', label="train")
+    plt.plot(range(0, 5000, 1), test_acc, '.', label="test")
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.title('Breast Tissue Accuracy plot')
+    plt.savefig('results/accuracy-breats-tissue.png')
+
+
     #
     # pickle_knowledge(network_white, 'winequality-white-knowledge.pickle')
 
-    pickler = open('winequality-white-knowledge.pickle', 'rb')
-    network_white = pickle.load(pickler)
-
-
-    # Target network without transfer
-    traindata, testdata = getdata('WineQualityDataset/winequality-red.csv')
-    network_red = Network(Topo=topo, Train=traindata, Test=testdata, learn_rate=lrate, alpha=alpha)
-    print("\nWine Quality Red Without Transfer:")
-    train_acc_wo, test_acc_wo = network_red.BP_GD(stocastic=True, vanilla=1, depth=maxepoch)
-    print "\nTrain Data performance: "
-    sse, acc = network_red.TestNetwork(phase=0, erTolerance=etol_tr)
-    print("sse: "+ str(sse) + " acc: "+ str(acc))
-    print "Test Data performance: "
-    sse, acc = network_red.TestNetwork(phase=1, erTolerance=etol)
-    print("sse: " + str(sse) + " acc: " + str(acc))
-    pickle_knowledge(network_red, 'winequality-red-knowledge.pickle')
-
-
-
-    # Transfer knowledge from source network to the target network
-    network_red_trf = Network(Topo=topo, Train=traindata, Test=testdata, learn_rate =lrate, alpha=alpha)
-    network_red_trf.transfer_weights(network_white)
-    print("\nWine Quality Red With Transfer:")
-    train_acc_w, test_acc_w = network_red_trf.BP_GD(stocastic=True, vanilla=1, depth=maxepoch)
-
-    print "\nTrain Data performance: "
-    sse, acc = network_red_trf.TestNetwork(phase=0, erTolerance=etol_tr)
-    print("sse: "+ str(sse) + " acc: "+ str(acc))
-    print "\nTest Data performance: "
-    sse, acc = network_red_trf.TestNetwork(phase=1, erTolerance=etol)
-    print("sse: " + str(sse) + " acc: " + str(acc))
-
-    pickle_knowledge(network_red_trf, 'winequality-red-knowledge-trf.pickle')
-
-
-
-    ax = plt.subplot(111)
-    plt.plot(range(0, 500, 10), train_acc_w, label="train_w_trf")
-    plt.plot(range(0, 500, 10), train_acc_wo, label="train_wo_trf")
-
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.title('Wine Quality-Red Accuracy plot')
-    plt.savefig('results/accuracy-red-train.png')
-
-    plt.clf()
-
-    plt.plot(range(0, 500, 10), test_acc_w, label="test_w_trf")
-    plt.plot(range(0, 500, 10), test_acc_wo, label="test_wo_trf")
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.title('Wine Quality-Red Accuracy plot')
-    plt.savefig('results/accuracy-red-test.png')
+    # pickler = open('winequality-white-knowledge.pickle', 'rb')
+    # network_white = pickle.load(pickler)
+    #
+    #
+    # # Target network without transfer
+    # traindata, testdata = getdata('WineQualityDataset/winequality-red.csv')
+    # network_red = Network(Topo=topo, Train=traindata, Test=testdata, learn_rate=lrate, alpha=alpha)
+    # print("\nWine Quality Red Without Transfer:")
+    # train_acc_wo, test_acc_wo = network_red.BP_GD(stocastic=True, vanilla=1, depth=maxepoch)
+    # print "\nTrain Data performance: "
+    # sse, acc = network_red.TestNetwork(phase=0, erTolerance=etol_tr)
+    # print("sse: "+ str(sse) + " acc: "+ str(acc))
+    # print "Test Data performance: "
+    # sse, acc = network_red.TestNetwork(phase=1, erTolerance=etol)
+    # print("sse: " + str(sse) + " acc: " + str(acc))
+    # pickle_knowledge(network_red, 'winequality-red-knowledge.pickle')
+    #
+    #
+    #
+    # # Transfer knowledge from source network to the target network
+    # network_red_trf = Network(Topo=topo, Train=traindata, Test=testdata, learn_rate =lrate, alpha=alpha)
+    # network_red_trf.transfer_weights(network_white)
+    # print("\nWine Quality Red With Transfer:")
+    # train_acc_w, test_acc_w = network_red_trf.BP_GD(stocastic=True, vanilla=1, depth=maxepoch)
+    #
+    # print "\nTrain Data performance: "
+    # sse, acc = network_red_trf.TestNetwork(phase=0, erTolerance=etol_tr)
+    # print("sse: "+ str(sse) + " acc: "+ str(acc))
+    # print "\nTest Data performance: "
+    # sse, acc = network_red_trf.TestNetwork(phase=1, erTolerance=etol)
+    # print("sse: " + str(sse) + " acc: " + str(acc))
+    #
+    # pickle_knowledge(network_red_trf, 'winequality-red-knowledge-trf.pickle')
+    #
+    #
+    #
+    # ax = plt.subplot(111)
+    # plt.plot(range(0, 500, 10), train_acc_w, label="train_w_trf")
+    # plt.plot(range(0, 500, 10), train_acc_wo, label="train_wo_trf")
+    #
+    #
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Accuracy')
+    # plt.title('Wine Quality-Red Accuracy plot')
+    # plt.savefig('results/accuracy-red-train.png')
+    #
+    # plt.clf()
+    #
+    # plt.plot(range(0, 500, 10), test_acc_w, label="test_w_trf")
+    # plt.plot(range(0, 500, 10), test_acc_wo, label="test_wo_trf")
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Accuracy')
+    # plt.title('Wine Quality-Red Accuracy plot')
+    # plt.savefig('results/accuracy-red-test.png')
