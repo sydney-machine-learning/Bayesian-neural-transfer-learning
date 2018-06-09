@@ -394,9 +394,9 @@ def pickle_knowledge(obj, pickle_file):
 if __name__ == '__main__':
 
 
-    input = 4
-    hidden = 16
-    output = 3
+    input = 34
+    hidden = 40
+    output = 2
     topology = [input, hidden, output]
     # print(traindata.shape, testdata.shape)
     # lrate = 0.67
@@ -405,9 +405,11 @@ if __name__ == '__main__':
     etol = 0.6
     alpha = 0.1
 
-    traindata, testdata = getdata('./datasets/Iris/iris.csv', input)
-    # traindata = np.genfromtxt('./datasets/Cancer/ftrain.txt')
-    # testdata = np.genfromtxt('./datasets/Cancer/ftest.txt')
+    # traindata, testdata = getdata('./datasets/Iris/iris.csv', input)
+    traindata = np.genfromtxt('./datasets/Ions/ftrain.csv', delimiter=',')
+    testdata = np.genfromtxt('./datasets/Ions/ftest.csv', delimiter=',')
+
+    print(traindata.shape)
 
     # sc_X = StandardScaler()
     # x1 = sc_X.fit_transform(traindata[:, :input])
@@ -417,10 +419,10 @@ if __name__ == '__main__':
     # testdata[:, :input] = normalize(x1, norm='l2')
 
 
-    print(traindata)
-
-    print("\n\n")
-    print(testdata)
+    # print(traindata)
+    #
+    # print("\n\n")
+    # print(testdata)
 
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
@@ -444,25 +446,18 @@ if __name__ == '__main__':
     rmse_tes = np.mean(rmse_test[int(burnin):])
     rmsetest_std = np.std(rmse_test[int(burnin):])
 
-    # print rmse_tr, rmsetr_std, rmse_tes, rmsetest_std
-
-    # train_acc = []
-    # test_acc = []
-
     ytestdata = testdata[:, input:]
     ytraindata = traindata[:, input:]
 
-    # train_acc = train_acc[int(burnin):]
-    # test_acc = test_acc[int(burnin):]
 
 
     print train_acc, test_acc
     print "\n\n\n"
     print "Train accuracy:\n"
-    # print train_acc
-    print "Mean: "+ str(np.mean(train_acc))
+
+    print "Mean: "+ str(np.mean(train_acc[int(burnin):]))
     print "Test accuracy:\n"
-    print "Mean: "+ str(np.mean(test_acc))
+    print "Mean: "+ str(np.mean(test_acc[int(burnin):]))
 
     print("Generating Plots: ")
 
@@ -472,12 +467,9 @@ if __name__ == '__main__':
     # test_acc = np.array(test_acc[int(burnin):])
     # test_std = np.std(test_acc[int(burnin):])
 
-    # train_acc_mu = train_acc.mean()
-    # test_acc_mu = test_acc.mean()
-
     ax = plt.subplot(111)
-    plt.plot(range(len(train_acc)), train_acc, '.', label="train")
-    plt.plot(range(len(test_acc)), test_acc, '.', label="test")
+    plt.plot(range(len(train_acc)), train_acc, 'g.', label="train")
+    plt.plot(range(len(test_acc)), test_acc, 'r.', label="test")
 
     
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
@@ -485,10 +477,20 @@ if __name__ == '__main__':
 
     plt.xlabel('Samples')
     plt.ylabel('Accuracy')
-    plt.title('Breast Tissue Accuracy plot')
-    plt.savefig('accuracy-iris-mcmc-3.png')
+    plt.title('Ions Accuracy plot')
+    plt.savefig('accuracy-ions-mcmc-1.png')
 
     plt.clf()
 
+    ax = plt.subplot(111)
+    plt.plot(range(len(rmse_train)), rmse_train, 'b.', label="train-rmse")
+    plt.plot(range(len(rmse_test)), rmse_test, 'c.', label="test-rmse")
 
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('RMSE')
+    plt.title('Ions RMSE plot')
+    plt.savefig('rmse-ions-mcmc-1.png')
 
