@@ -394,8 +394,8 @@ def pickle_knowledge(obj, pickle_file):
 if __name__ == '__main__':
 
 
-    input = 34
-    hidden = 40
+    input = 9
+    hidden = 16
     output = 2
     topology = [input, hidden, output]
     # print(traindata.shape, testdata.shape)
@@ -406,8 +406,8 @@ if __name__ == '__main__':
     alpha = 0.1
 
     # traindata, testdata = getdata('./datasets/Iris/iris.csv', input)
-    traindata = np.genfromtxt('./datasets/Ions/ftrain.csv', delimiter=',')
-    testdata = np.genfromtxt('./datasets/Ions/ftest.csv', delimiter=',')
+    traindata = np.genfromtxt('./datasets/TicTac/ftrain.csv', delimiter=',')
+    testdata = np.genfromtxt('./datasets/TicTac/ftest.csv', delimiter=',')
 
     print(traindata.shape)
 
@@ -429,7 +429,7 @@ if __name__ == '__main__':
 
     random.seed(time.time())
 
-    numSamples = 8000# need to decide yourself
+    numSamples = 2000# need to decide yourself
 
     mcmc = MCMC(numSamples, traindata, testdata, topology)  # declare class
 
@@ -477,8 +477,8 @@ if __name__ == '__main__':
 
     plt.xlabel('Samples')
     plt.ylabel('Accuracy')
-    plt.title('Ions Accuracy plot')
-    plt.savefig('accuracy-ions-mcmc-1.png')
+    plt.title('Tic-Tac-Toe Accuracy plot')
+    plt.savefig('accuracy-ttt-mcmc.png')
 
     plt.clf()
 
@@ -491,6 +491,6 @@ if __name__ == '__main__':
 
     plt.xlabel('Samples')
     plt.ylabel('RMSE')
-    plt.title('Ions RMSE plot')
-    plt.savefig('rmse-ions-mcmc-1.png')
+    plt.title('Tic-Tac-Toe RMSE plot')
+    plt.savefig('rmse-ttt-mcmc.png')
 
