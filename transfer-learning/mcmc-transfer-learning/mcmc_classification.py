@@ -1,6 +1,5 @@
 # !/usr/bin/python
 import matplotlib
-
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,32 +14,31 @@ import pickle
 from sklearn.preprocessing import normalize
 from sklearn.preprocessing import StandardScaler
 
+
 sys.path.insert(0, './datasets/Iris/')
 from preprocess_iris import getdata
 
-
 def convert_time(secs):
     if secs >= 60:
-        mins = str(int(secs / 60))
-        secs = str(int(secs % 60))
+        mins = str(int(secs/60))
+        secs = str(int(secs%60))
     else:
         secs = str(int(secs))
         mins = str(00)
 
     if len(mins) == 1:
-        mins = '0' + mins
+        mins = '0'+mins
 
     if len(secs) == 1:
-        secs = '0' + secs
+        secs = '0'+secs
 
     return [mins, secs]
-
 
 # --------------------------------------------------------------------------
 
 # An example of a class
 class Network:
-    def __init__(self, Topo, Train, Test, learn_rate=0.5, alpha=0.1):
+    def __init__(self, Topo, Train, Test, learn_rate = 0.5, alpha = 0.1):
         self.Top = Topo  # NN topology [input, hidden, output]
         self.TrainData = Train
         self.TestData = Test
@@ -55,6 +53,8 @@ class Network:
         self.B2 = np.random.randn(1, self.Top[2]) / np.sqrt(self.Top[1])  # bias second layer
         # self.W3 = np.random.randn(self.Top[2], self.Top[3]) / np.sqrt(self.Top[2])
         # self.B3 = np.random.randn(1, self.Top[3]) / np.sqrt(self.Top[2])  # bias second layer
+
+
 
         self.hidout = np.zeros((1, self.Top[1]))  # output of first hidden layer
         # self.hidout2 = np.zeros((1,self.Top[2]))
@@ -121,9 +121,10 @@ class Network:
         # w_layer3 = w[w_layer2size:w_layer3size + w_layer2size]
         # self.W3 = np.reshape(w_layer3, (self.Top[2], self.Top[3]))
 
-        self.B1 = w[w_layer1size + w_layer2size:w_layer1size + w_layer2size + self.Top[1]]
-        self.B2 = w[w_layer1size + w_layer2size + self.Top[1]:w_layer1size + w_layer2size + self.Top[1] + self.Top[2]]
+        self.B1 = w[w_layer1size + w_layer2size :w_layer1size + w_layer2size + self.Top[1]]
+        self.B2 = w[w_layer1size + w_layer2size + self.Top[1] :w_layer1size + w_layer2size + self.Top[1] + self.Top[2]]
         # self.B3 = w[w_layer1size + w_layer2size + w_layer3size + self.Top[1] + self.Top[2]:w_layer1size + w_layer2size + w_layer3size + self.Top[1] + self.Top[2] + self.Top[3]]
+
 
     def encode(self):
         w1 = self.W1.ravel()
@@ -132,14 +133,15 @@ class Network:
         w = np.concatenate([w1, w2, self.B1, self.B2])
         return w
 
-    def evaluate_proposal(self, data, w):  # BP with SGD (Stocastic BP)
+
+    def evaluate_proposal(self, data, w ):  # BP with SGD (Stocastic BP)
 
         self.decode(w)  # method to decode w into W1, W2, B1, B2.
         size = data.shape[0]
 
         Input = np.zeros((1, self.Top[0]))  # temp hold input
         Desired = np.zeros((1, self.Top[2]))
-        fx = np.zeros((size, self.Top[2]))
+        fx = np.zeros((size,self.Top[2]))
 
         for i in xrange(0, size):  # to see what fx is produced by your current weight update
             Input = data[i, 0:self.Top[0]]
@@ -166,6 +168,7 @@ class Network:
         self.B2 = self.BestB2  # load best knowledge
         # self.B3 = self.BestB3
 
+
         for s in xrange(0, testSize):
 
             Input[:] = Data[s, 0:self.Top[0]]
@@ -187,7 +190,6 @@ class Network:
         self.B2 = source.B2
         # self.B3 = source.B3
 
-
 # --------------------------------------------------------------------------
 class MCMC:
     def __init__(self, samples, traindata, testdata, topology):
@@ -199,7 +201,7 @@ class MCMC:
 
     def softmax(self, fx):
         ex = np.exp(fx)
-        sum_ex = np.sum(ex, axis=1)
+        sum_ex = np.sum(ex, axis = 1)
         sum_ex = np.multiply(np.ones(ex.shape), sum_ex[:, np.newaxis])
         prob = np.divide(ex, sum_ex)
         return prob
@@ -226,7 +228,7 @@ class MCMC:
         for i in range(y_out.shape[0]):
             if out[i] == y_out[i]:
                 count += 1
-        acc = float(count) / y_out.shape[0] * 100
+        acc = float(count)/y_out.shape[0] * 100
         # print count
         # loss = np.log(np.sum(np.multiply(prob, y), axis=1))
         # print np.sum(loss)
@@ -243,6 +245,16 @@ class MCMC:
 
     def sampler(self):
 
+        # Create file objects to write the attributes of the samples
+        trainaccfile = open('trainacc.csv', 'w')
+        testaccfile = open('testacc.csv', 'w')
+
+        trainrmsefile = open('trainrmse.csv', 'w')
+        testrmsefile = open('testrmse.csv', 'w')
+
+        wprofile = open('wprop.csv', 'w')
+
+
         # ------------------- initialize MCMC
 
         # start = time.time()
@@ -253,8 +265,6 @@ class MCMC:
         x_test = np.linspace(0, 1, num=testsize)
         x_train = np.linspace(0, 1, num=trainsize)
 
-        train_acc = np.zeros((samples,))
-        test_acc = np.zeros((samples,))
 
         netw = self.topology  # [input, hidden, output]
         y_test = self.testdata[:, netw[0]:]
@@ -264,13 +274,10 @@ class MCMC:
 
         w_size = (netw[0] * netw[1]) + (netw[1] * netw[2]) + netw[1] + netw[2]  # num of weights and bias
 
-        pos_w = np.ones((samples, w_size))  # posterior of all weights and bias over all samples
-        pos_tau = np.ones((samples, 1))
+        pos_w = np.ones((w_size, ))  # posterior of all weights and bias over all samples
 
         fxtrain_samples = np.ones((samples, trainsize, self.topology[2]))  # fx of train data over all samples
         fxtest_samples = np.ones((samples, testsize, self.topology[2]))  # fx of test data over all samples
-        rmse_train = np.zeros(samples)
-        rmse_test = np.zeros(samples)
 
         w = np.random.randn(w_size)
         w_proposal = np.random.randn(w_size)
@@ -297,8 +304,9 @@ class MCMC:
         [likelihood, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w, tau_pro)
         [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w, tau_pro)
 
-        train_acc[0] = trainacc
-        test_acc[0] = testacc
+
+        np.savetxt(trainaccfile, [trainacc])
+        np.savetxt(testaccfile, [testacc])
 
         naccept = 0
         # print 'begin sampling using mcmc random walk'
@@ -310,10 +318,8 @@ class MCMC:
             eta_pro = eta + np.random.normal(0, step_eta, 1)
             # tau_pro = math.exp(eta_pro)
 
-            [likelihood_proposal, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata,
-                                                                                          w_proposal, tau_pro)
-            [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata,
-                                                                                     w_proposal, tau_pro)
+            [likelihood_proposal, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w_proposal, tau_pro)
+            [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w_proposal, tau_pro)
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
 
@@ -344,27 +350,51 @@ class MCMC:
                 # print(likelihood)
                 # print 'accepted'
 
-                pos_w[i + 1,] = w_proposal
-                pos_tau[i + 1,] = tau_pro
-                fxtrain_samples[i + 1,] = pred_train
-                fxtest_samples[i + 1,] = pred_test
-                rmse_train[i + 1,] = rmsetrain
-                rmse_test[i + 1,] = rmsetest
-                train_acc[i + 1] = trainacc
-                test_acc[i + 1] = testacc
+                # pos_w[i + 1,] = w_proposal
+                # pos_tau[i + 1,] = tau_pro
+                # fxtrain_samples[i + 1,] = pred_train
+                # fxtest_samples[i + 1,] = pred_test
+                # rmse_train[i + 1,] = rmsetrain
+                # rmse_test[i + 1,] = rmsetest
+                # train_acc[i + 1] = trainacc
+                # test_acc[i + 1] = testacc
 
-                plt.plot(x_train, pred_train)
+                np.savetxt(wprofile, w_proposal, delimiter=',')
+                np.savetxt(trainaccfile, [trainacc])
+                np.savetxt(testaccfile, [testacc])
+                np.savetxt(trainrmsefile, [rmsetrain])
+                np.savetxt(testrmsefile, [rmsetest])
+
+                # print w_proposal
+
+
+                wpro_prev = w_proposal
+                trainacc_prev = trainacc
+                testacc_prev = testacc
+                rmsetrain_prev = rmsetrain
+                rmsetest_prev = rmsetest
+
+
+
+                # plt.plot(x_train, pred_train)
 
 
             else:
-                pos_w[i + 1,] = pos_w[i,]
-                pos_tau[i + 1,] = pos_tau[i,]
-                fxtrain_samples[i + 1,] = fxtrain_samples[i,]
-                fxtest_samples[i + 1,] = fxtest_samples[i,]
-                rmse_train[i + 1,] = rmse_train[i,]
-                rmse_test[i + 1,] = rmse_test[i,]
-                train_acc[i + 1] = train_acc[i]
-                test_acc[i + 1] = test_acc[i]
+                # pos_w[i + 1,] = pos_w[i,]
+                # pos_tau[i + 1,] = pos_tau[i,]
+                # fxtrain_samples[i + 1,] = fxtrain_samples[i,]
+                # fxtest_samples[i + 1,] = fxtest_samples[i,]
+                # rmse_train[i + 1,] = rmse_train[i,]
+                # rmse_test[i + 1,] = rmse_test[i,]
+                # train_acc[i + 1] = train_acc[i]
+                # test_acc[i + 1] = test_acc[i]
+
+                np.savetxt(wprofile, wpro_prev)
+                np.savetxt(trainaccfile, [trainacc_prev])
+                np.savetxt(testaccfile, [testacc_prev])
+                np.savetxt(trainrmsefile, [rmsetrain_prev])
+                np.savetxt(testrmsefile, [rmsetest_prev])
+
 
                 # print i, 'rejected and retained'
             # elapsed = convert_time(time.time() - start)
@@ -374,9 +404,17 @@ class MCMC:
         print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
 
-        return (
-        pos_w, pos_tau, fxtrain_samples, fxtest_samples, x_train, x_test, rmse_train, rmse_test, train_acc, test_acc,
-        accept_ratio)
+        # Close the files
+        wprofile.close()
+        trainaccfile.close()
+        testaccfile.close()
+        trainrmsefile.close()
+        testrmsefile.close()
+
+        return (x_train, x_test, accept_ratio)
+
+
+
 
 
 # --------------------------------------------------------------------------
@@ -387,9 +425,10 @@ def pickle_knowledge(obj, pickle_file):
     pickle.dump(obj, pickling_on)
     pickling_on.close()
 
-
 # --------------------------------------------------------------------------
 if __name__ == '__main__':
+
+
     input = 9
     hidden = 16
     output = 2
@@ -405,7 +444,7 @@ if __name__ == '__main__':
     traindata = np.genfromtxt('./datasets/TicTac/ftrain.csv', delimiter=',')
     testdata = np.genfromtxt('./datasets/TicTac/ftest.csv', delimiter=',')
 
-    print(traindata.shape)
+    # print(traindata.shape)
 
     # sc_X = StandardScaler()
     # x1 = sc_X.fit_transform(traindata[:, :input])
@@ -414,26 +453,30 @@ if __name__ == '__main__':
     # x1 = sc_X.fit_transform(testdata[:, :input])
     # testdata[:, :input] = normalize(x1, norm='l2')
 
-    # print(traindata)
-    #
-    # print("\n\n")
-    # print(testdata)
+
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
 
     random.seed(time.time())
 
-    numSamples = 2000  # need to decide yourself
+    numSamples = 2000# need to decide yourself
 
     mcmc = MCMC(numSamples, traindata, testdata, topology)  # declare class
 
-    [pos_w, pos_tau, fx_train, fx_test, x_train, x_test, rmse_train, rmse_test, train_acc, test_acc,
-     accept_ratio] = mcmc.sampler()
+    mcmc.sampler()
+
+
+    train_acc = np.genfromtxt('trainacc.csv')
+    test_acc = np.genfromtxt('testacc.csv')
+    rmse_train = np.genfromtxt('trainrmse.csv')
+    rmse_test = np.genfromtxt('testrmse.csv')
+
+
     # print 'sucessfully sampled'
     burnin = 0.1 * numSamples  # use post burn in samples
-
-    pos_w = pos_w[int(burnin):, ]
-    pos_tau = pos_tau[int(burnin):, ]
+    #
+    # pos_w = pos_w[int(burnin):, ]
+    # pos_tau = pos_tau[int(burnin):, ]
 
     rmse_tr = np.mean(rmse_train[int(burnin):])
     rmsetr_std = np.std(rmse_train[int(burnin):])
@@ -444,13 +487,15 @@ if __name__ == '__main__':
     ytestdata = testdata[:, input:]
     ytraindata = traindata[:, input:]
 
+
+
     print train_acc, test_acc
     print "\n\n\n"
     print "Train accuracy:\n"
 
-    print "Mean: " + str(np.mean(train_acc[int(burnin):]))
+    print "Mean: "+ str(np.mean(train_acc[int(burnin):]))
     print "Test accuracy:\n"
-    print "Mean: " + str(np.mean(test_acc[int(burnin):]))
+    print "Mean: "+ str(np.mean(test_acc[int(burnin):]))
 
     print("Generating Plots: ")
 
@@ -464,6 +509,7 @@ if __name__ == '__main__':
     plt.plot(range(len(train_acc)), train_acc, 'g.', label="train")
     plt.plot(range(len(test_acc)), test_acc, 'r.', label="test")
 
+    
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
     leg.get_frame().set_alpha(0.5)
 
@@ -485,3 +531,4 @@ if __name__ == '__main__':
     plt.ylabel('RMSE')
     plt.title('Tic-Tac-Toe RMSE plot')
     plt.savefig('rmse-ttt-mcmc.png')
+
