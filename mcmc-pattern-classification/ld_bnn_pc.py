@@ -172,7 +172,7 @@ class MCMC:
         d = self.topology[0]  # number input neurons
         part1 = -1 * ((d * h + h + 2) / 2) * np.log(sigma_squared)
         part2 = 1 / (2 * sigma_squared) * (sum(np.square(w)))
-        log_loss = part1 - part2  - (1 + nu_1) * np.log(tausq) - (nu_2 / tausq)
+        log_loss = part1 - part2
         return log_loss
 
     def sampler(self, w_limit, tau_limit, file):
