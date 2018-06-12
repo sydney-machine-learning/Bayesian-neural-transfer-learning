@@ -203,8 +203,6 @@ class MCMC:
         trainrmsefile = open('./results/trainrmse.csv', 'w')
         testrmsefile = open('./results/testrmse.csv', 'w')
 
-        wprofile = open('./results/wprop.csv', 'w')
-
 
         # ------------------- initialize MCMC
 
@@ -257,7 +255,10 @@ class MCMC:
         np.savetxt(testaccfile, [testacc])
         np.savetxt(trainrmsefile, [rmsetrain])
         np.savetxt(testrmsefile, [rmsetest])
+
+        wprofile = open('./results/wprop.csv', 'a')
         np.savetxt(wprofile, [w_proposal])
+        wprofile.close()
 
         trainacc_prev = trainacc
         testacc_prev = testacc
@@ -302,7 +303,9 @@ class MCMC:
                 print i, trainacc, rmsetrain
 
                 # save arrays to file
+                wprofile = open('./results/wprop.csv', 'a')
                 np.savetxt(wprofile, [w_proposal], delimiter=',')
+                wprofile.close()
                 np.savetxt(trainaccfile, [trainacc])
                 np.savetxt(testaccfile, [testacc])
                 np.savetxt(trainrmsefile, [rmsetrain])
@@ -316,7 +319,9 @@ class MCMC:
                 rmsetest_prev = rmsetest
 
             else:
+                wprofile = open('./results/wprop.csv', 'a')
                 np.savetxt(wprofile, [wpro_prev], delimiter=',')
+                wprofile.close()
                 np.savetxt(trainaccfile, [trainacc_prev])
                 np.savetxt(testaccfile, [testacc_prev])
                 np.savetxt(trainrmsefile, [rmsetrain_prev])
@@ -432,8 +437,8 @@ if __name__ == '__main__':
     # test_std = np.std(test_acc[int(burnin):])
 
     ax = plt.subplot(111)
-    plt.plot(range(len(train_acc)), train_acc, 'g.', label="train")
-    plt.plot(range(len(test_acc)), test_acc, 'r.', label="test")
+    plt.plot(range(len(train_acc)), train_acc, 'g', label="train")
+    plt.plot(range(len(test_acc)), test_acc, 'm', label="test")
 
     
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)

@@ -402,8 +402,8 @@ if __name__ == '__main__':
     alpha = 0.1
 
     # traindata, testdata = getdata('./datasets/Iris/iris.csv', input)
-    traindata = np.genfromtxt('./datasets/TicTac/ftrain.csv', delimiter=',')
-    testdata = np.genfromtxt('./datasets/TicTac/ftest.csv', delimiter=',')
+    traindata = np.genfromtxt('../datasets/TicTac/ftrain.csv', delimiter=',')
+    testdata = np.genfromtxt('../datasets/TicTac/ftest.csv', delimiter=',')
 
     print(traindata.shape)
 
