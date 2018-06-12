@@ -257,7 +257,7 @@ class MCMC:
         np.savetxt(testrmsefile, [rmsetest])
 
         wprofile = open('./results/wprop.csv', 'a')
-        np.savetxt(wprofile, [w_proposal])
+        np.savetxt(wprofile, [w_proposal], fmt='%0.2f')
         wprofile.close()
 
         trainacc_prev = trainacc
@@ -304,7 +304,7 @@ class MCMC:
 
                 # save arrays to file
                 wprofile = open('./results/wprop.csv', 'a')
-                np.savetxt(wprofile, [w_proposal], delimiter=',')
+                np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%0.2f')
                 wprofile.close()
                 np.savetxt(trainaccfile, [trainacc])
                 np.savetxt(testaccfile, [testacc])
