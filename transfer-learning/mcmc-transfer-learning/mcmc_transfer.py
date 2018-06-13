@@ -152,6 +152,7 @@ class MCMC:
         self.topology = topology  # max epocs
         self.traindata = traindata  #
         self.testdata = testdata
+        self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
         # ----------------
 
     def softmax(self, fx):
@@ -164,7 +165,7 @@ class MCMC:
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
 
-    def likelihood_func(self, neuralnet, data, w, tausq):
+    def likelihood_func(self, neuralnet, data, w):
         y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
         rmse = self.rmse(fx, y)
@@ -185,7 +186,7 @@ class MCMC:
         return [loss, fx, rmse, acc]
 
 
-    def prior_likelihood(self, sigma_squared, nu_1, nu_2, w, tausq):
+    def prior_likelihood(self, sigma_squared, w):
         h = self.topology[1]  # number hidden neurons
         d = self.topology[0]  # number input neurons
         part1 = -1 * ((d * h + h + 2) / 2) * np.log(sigma_squared)
@@ -194,7 +195,33 @@ class MCMC:
         return log_loss
 
 
-    def sampler(self):
+    def genweights(self, w_mean, w_std):
+        w_prop = np.ones(w_mean.shape)
+        for index in range(w_mean.shape[0]):
+            w_prop[index] = np.random.normal(w_mean[index], w_std[index], 1)
+        return w_prop
+
+
+    def transfer(self, stdmulconst):
+        file = open('results/wprop.csv', 'rb')
+        lines = file.read().split('\n')[:-1]
+
+        weights = np.ones((self.samples, self.wsize))
+        burnin = int(0.1 * self.samples)
+
+        for index in range(len(lines)):
+            line = lines[index]
+            w = np.array(list(map(float, line.split(','))))
+            # print(w.shape)
+            weights[index, :] = w
+
+        weights = weights[burnin:, :]
+        w_mean = weights.mean(axis=0)
+        w_std = stdmulconst * np.std(weights, axis=0)
+        return self.genweights(w_mean, w_std)
+
+
+    def sampler(self, w_pretrain, transfer = False):
 
         # Create file objects to write the attributes of the samples
         trainaccfile = open('./results/trainacc.csv', 'w')
@@ -206,7 +233,7 @@ class MCMC:
 
         # ------------------- initialize MCMC
 
-        # start = time.time()
+        start = time.time()
         testsize = self.testdata.shape[0]
         trainsize = self.traindata.shape[0]
         samples = self.samples
@@ -219,47 +246,43 @@ class MCMC:
         netw = self.topology  # [input, hidden, output]
         y_test = self.testdata[:, netw[0]:]
         y_train = self.traindata[:, netw[0]:]
-        # print netw[0]
-        w_size = (netw[0] * netw[1]) + (netw[1] * netw[2]) + netw[1] + netw[2]  # num of weights and bias
 
-        pos_w = np.ones((w_size, ))  # posterior of all weights and bias over all samples
+        pos_w = np.ones((self.wsize, ))  # posterior of all weights and bias over all samples
 
 
-        w = np.random.randn(w_size)
-        w_proposal = np.random.randn(w_size)
+        w = w_pretrain
+
+        w_proposal = w_pretrain
 
         step_w = 0.02;  # defines how much variation you need in changes to w
-        step_eta = 0.01;
+
         # --------------------- Declare FNN and initialize
 
         neuralnet = Network(self.topology, self.traindata, self.testdata)
-        # print 'evaluate Initial w'
 
         pred_train = neuralnet.evaluate_proposal(self.traindata, w)
         pred_test = neuralnet.evaluate_proposal(self.testdata, w)
 
-        eta = np.log(np.var(pred_train - y_train))
-        tau_pro = np.exp(eta)
 
         sigma_squared = 25
-        nu_1 = 0
-        nu_2 = 0
 
-        prior = self.prior_likelihood(sigma_squared, nu_1, nu_2, w, tau_pro)  # takes care of the gradients
+        prior = self.prior_likelihood(sigma_squared, w)  # takes care of the gradients
 
-        [likelihood, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w, tau_pro)
-        [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w, tau_pro)
+        [likelihood, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w)
+        [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w)
 
 
-        np.savetxt(trainaccfile, [trainacc])
-        np.savetxt(testaccfile, [testacc])
-        np.savetxt(trainrmsefile, [rmsetrain])
-        np.savetxt(testrmsefile, [rmsetest])
 
-        np.reshape(w_proposal, (1, w_proposal.shape[0]))
-        with open('./results/wprop.csv', 'w') as wprofile:
-            np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
+        if transfer:
+            np.reshape(w_proposal, (1, w_proposal.shape[0]))
+            with open('./results/wprop.csv', 'w') as wprofile:
+                np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+
+            np.savetxt(trainaccfile, [trainacc])
+            np.savetxt(testaccfile, [testacc])
+            np.savetxt(trainrmsefile, [rmsetrain])
+            np.savetxt(testrmsefile, [rmsetest])
 
 
         trainacc_prev = trainacc
@@ -273,18 +296,14 @@ class MCMC:
 
         for i in range(samples - 1):
 
-            w_proposal = w + np.random.normal(0, step_w, w_size)
+            w_proposal = w + np.random.normal(0, step_w, self.wsize)
 
-            eta_pro = eta + np.random.normal(0, step_eta, 1)
-            # tau_pro = math.exp(eta_pro)
-
-            [likelihood_proposal, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w_proposal, tau_pro)
-            [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w_proposal, tau_pro)
+            [likelihood_proposal, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w_proposal)
+            [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w_proposal)
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
 
-            prior_prop = self.prior_likelihood(sigma_squared, nu_1, nu_2, w_proposal,
-                                               tau_pro)  # takes care of the gradients
+            prior_prop = self.prior_likelihood(sigma_squared, w_proposal)  # takes care of the gradients
 
             diff_likelihood = likelihood_proposal - likelihood
             diff_prior = prior_prop - prior
@@ -295,28 +314,31 @@ class MCMC:
 
             if u < mh_prob:
                 # Update position
-                # print    i, ' is accepted sample'
                 naccept += 1
                 likelihood = likelihood_proposal
                 prior_likelihood = prior_prop
                 w = w_proposal
-                eta = eta_pro
 
-                print i, trainacc, rmsetrain
-
-
-                # print str([0])
-
+                # print i, trainacc, rmsetrain
+                elapsed = convert_time(time.time() - start)
+                sys.stdout.write(
+                    '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                    + "\tTrain accuracy: " + str(trainacc)
+                    + " Train RMSE: "+ str(rmsetrain)
+                    + "\tTest accuracy: " + str(testacc)
+                    + " Test RMSE: " + str(rmsetest)
+                    + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
 
                 # save arrays to file
-                np.reshape(w_proposal, (1, w_proposal.shape[0]))
-                with open('./results/wprop.csv', 'a') as wprofile:
-                    np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+                if transfer:
+                    np.reshape(w_proposal, (1, w_proposal.shape[0]))
+                    with open('./results/wprop.csv', 'a') as wprofile:
+                        np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
-                np.savetxt(trainaccfile, [trainacc])
-                np.savetxt(testaccfile, [testacc])
-                np.savetxt(trainrmsefile, [rmsetrain])
-                np.savetxt(testrmsefile, [rmsetest])
+                    np.savetxt(trainaccfile, [trainacc])
+                    np.savetxt(testaccfile, [testacc])
+                    np.savetxt(trainrmsefile, [rmsetrain])
+                    np.savetxt(testrmsefile, [rmsetest])
 
                 #save values into previous variables
                 wpro_prev = w_proposal
@@ -326,23 +348,19 @@ class MCMC:
                 rmsetest_prev = rmsetest
 
             else:
-                np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
-                with open('./results/wprop.csv', 'a') as wprofile:
-                    np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
-                np.savetxt(trainaccfile, [trainacc_prev])
-                np.savetxt(testaccfile, [testacc_prev])
-                np.savetxt(trainrmsefile, [rmsetrain_prev])
-                np.savetxt(testrmsefile, [rmsetest_prev])
+                if transfer:
+                    np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
+                    with open('./results/wprop.csv', 'a') as wprofile:
+                        np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
+                    np.savetxt(trainaccfile, [trainacc_prev])
+                    np.savetxt(testaccfile, [testacc_prev])
+                    np.savetxt(trainrmsefile, [rmsetrain_prev])
+                    np.savetxt(testrmsefile, [rmsetest_prev])
 
-            # elapsed = convert_time(time.time() - start)
-            # sys.stdout.write('\rSamples: ' + str(i + 2) + "/" + str(samples) + " Time elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]))
-
-            # print naccept, ' num accepted'
         print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
 
         # Close the files
-        wprofile.close()
         trainaccfile.close()
         testaccfile.close()
         trainrmsefile.close()
@@ -350,50 +368,74 @@ class MCMC:
 
         return (x_train, x_test, accept_ratio)
 
+    def get_acc(self):
+        self.train_acc = np.genfromtxt('./results/trainacc.csv')
+        self.test_acc = np.genfromtxt('./results/testacc.csv')
+        self.rmse_train = np.genfromtxt('./results/trainrmse.csv')
+        self.rmse_test = np.genfromtxt('./results/testrmse.csv')
 
+    def display_acc(self):
+        burnin = 0.1 * numSamples  # use post burn in samples
+        self.get_acc()
+        rmse_tr = np.mean(self.rmse_train[int(burnin):])
+        rmsetr_std = np.std(self.rmse_train[int(burnin):])
 
+        rmse_tes = np.mean(self.rmse_test[int(burnin):])
+        rmsetest_std = np.std(self.rmse_test[int(burnin):])
+
+        print "Train accuracy:\n"
+
+        print "Mean: " + str(np.mean(self.train_acc[int(burnin):]))
+        print "Test accuracy:\n"
+        print "Mean: " + str(np.mean(self.test_acc[int(burnin):]))
+
+    def plot_acc(self, dataset):
+        ax = plt.subplot(111)
+        plt.plot(range(len(self.train_acc)), self.train_acc, 'g', label="train")
+        plt.plot(range(len(self.test_acc)), self.test_acc, 'm', label="test")
+
+        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+        leg.get_frame().set_alpha(0.5)
+
+        plt.xlabel('Samples')
+        plt.ylabel('Accuracy')
+        plt.title(dataset + ' Accuracy plot')
+        plt.savefig('./results/accuracy'+ dataset+'-mcmc.png')
+
+        plt.clf()
+
+        ax = plt.subplot(111)
+        plt.plot(range(len(self.rmse_train)), self.rmse_train, 'b.', label="train-rmse")
+        plt.plot(range(len(self.rmse_test)), self.rmse_test, 'c.', label="test-rmse")
+
+        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+        leg.get_frame().set_alpha(0.5)
+
+        plt.xlabel('Samples')
+        plt.ylabel('RMSE')
+        plt.title(dataset+' RMSE plot')
+        plt.savefig('./results/rmse-'+dataset+'-mcmc.png')
+        plt.clf()
 
 
 # --------------------------------------------------------------------------
 
-
-def pickle_knowledge(obj, pickle_file):
-    pickling_on = open(pickle_file, 'wb')
-    pickle.dump(obj, pickling_on)
-    pickling_on.close()
-
-# --------------------------------------------------------------------------
 if __name__ == '__main__':
 
-
-    input = 7
+    input = 11
     hidden = 94
     output = 10
     topology = [input, hidden, output]
-    # print(traindata.shape, testdata.shape)
-    # lrate = 0.67
 
     etol_tr = 0.2
     etol = 0.6
     alpha = 0.1
 
-    # traindata, testdata = getdata('./datasets/Iris/iris.csv', input)
     traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=',')
     testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-test.csv', delimiter=',')
-    # print(traindata.shape)
-
-    # print(traindata.shape)
-
-    # sc_X = StandardScaler()
-    # x1 = sc_X.fit_transform(traindata[:, :input])
-    # traindata[:, :input] = normalize(x1, norm='l2')
-    #
-    # x1 = sc_X.fit_transform(testdata[:, :input])
-    # testdata[:, :input] = normalize(x1, norm='l2')
-
-
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
+    c = 1.0
 
     random.seed(time.time())
 
@@ -401,72 +443,25 @@ if __name__ == '__main__':
 
     mcmc = MCMC(numSamples, traindata, testdata, topology)  # declare class
 
-    mcmc.sampler()
+    # generate random weights
+    w_random = np.random.randn(mcmc.wsize)
+
+    # start sampling
+    mcmc.sampler(w_random, transfer=True)
+
+    # display train and test accuracies
+    mcmc.display_acc()
+
+    # Plot the accuracies and rmse
+    mcmc.plot_acc('Wine-Quality-White')
 
 
-    train_acc = np.genfromtxt('./results/trainacc.csv')
-    test_acc = np.genfromtxt('./results/testacc.csv')
-    rmse_train = np.genfromtxt('./results/trainrmse.csv')
-    rmse_test = np.genfromtxt('./results/testrmse.csv')
-
-
-    # print 'sucessfully sampled'
-    burnin = 0.1 * numSamples  # use post burn in samples
-    #
-    # pos_w = pos_w[int(burnin):, ]
-    # pos_tau = pos_tau[int(burnin):, ]
-
-    rmse_tr = np.mean(rmse_train[int(burnin):])
-    rmsetr_std = np.std(rmse_train[int(burnin):])
-
-    rmse_tes = np.mean(rmse_test[int(burnin):])
-    rmsetest_std = np.std(rmse_test[int(burnin):])
-
-    ytestdata = testdata[:, input:]
-    ytraindata = traindata[:, input:]
+    # Transfer weights from trained network
+    w_transfer = mcmc.transfer(c)
+    print(w_transfer)
 
 
 
-    print train_acc, test_acc
-    print "\n\n\n"
-    print "Train accuracy:\n"
 
-    print "Mean: "+ str(np.mean(train_acc[int(burnin):]))
-    print "Test accuracy:\n"
-    print "Mean: "+ str(np.mean(test_acc[int(burnin):]))
 
-    print("Generating Plots: ")
-
-    # train_acc = np.array(train_acc[int(burnin):])
-    # train_std = np.std(train_acc[int(burnin):])
-    #
-    # test_acc = np.array(test_acc[int(burnin):])
-    # test_std = np.std(test_acc[int(burnin):])
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(train_acc)), train_acc, 'g', label="train")
-    plt.plot(range(len(test_acc)), test_acc, 'm', label="test")
-
-    
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('Accuracy')
-    plt.title('Wine-Quality-White Accuracy plot')
-    plt.savefig('./results/accuracy-wine-white-mcmc.png')
-
-    plt.clf()
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(rmse_train)), rmse_train, 'b.', label="train-rmse")
-    plt.plot(range(len(rmse_test)), rmse_test, 'c.', label="test-rmse")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('RMSE')
-    plt.title('Wine-Quality-White RMSE plot')
-    plt.savefig('./results/rmse-wine-white-mcmc.png')
 

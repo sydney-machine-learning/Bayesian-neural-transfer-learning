@@ -21,3 +21,10 @@ weights = weights[burnin:, :]
 w_mean = weights.mean(axis=0)
 w_std = np.std(weights, axis=0)
 
+w_prop = np.ones(w_mean.shape)
+
+for index in range(w_mean.shape[0]):
+    w_prop[index] = np.random.normal(w_mean[index], w_std[index], 1)
+
+print(w_prop)
+

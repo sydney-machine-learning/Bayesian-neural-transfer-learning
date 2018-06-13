@@ -6,20 +6,21 @@ from sklearn.cross_validation import train_test_split
 def getdata(file):
     data = np.genfromtxt(file, delimiter=';', skip_header=1)
     x = data[:, :-1]
+    y = data[:, -1].astype(int)
     # x = np.delete(x, np.s_[5:10:4], axis=1)
     # x = np.delete(x, np.s_[2:4:], axis=1)
-    yd = data[:, data.shape[1]-1].astype(int)
-    y = np.zeros((yd.shape[0], 4))
+    # yd = data[:, data.shape[1]-1].astype(int)
+    # y = np.zeros((yd.shape[0], 4))
     #print data
-    # yd = np.identity(10)
-    # yd = np.vstack([[0 for i in range(10)], yd])
-    #
-    # y = yd[y, :]
+    yd = np.identity(10)
+    yd = np.vstack([[0 for i in range(10)], yd])
+
+    y = yd[y, :]
     # print(y)
 
-    for index in xrange(yd.shape[0]):
-        y[index] = np.array(list(map(int, list(np.binary_repr(yd[index], width=4)))))
-        # print(y[index], yd[index])
+    # for index in xrange(yd.shape[0]):
+    #     y[index] = np.array(list(map(int, list(np.binary_repr(yd[index], width=4)))))
+    #     # print(y[index], yd[index])
 
     sc_X = StandardScaler()
     x1 = sc_X.fit_transform(x)
