@@ -219,7 +219,7 @@ class MCMC:
         netw = self.topology  # [input, hidden, output]
         y_test = self.testdata[:, netw[0]:]
         y_train = self.traindata[:, netw[0]:]
-        print netw[0]
+        # print netw[0]
         w_size = (netw[0] * netw[1]) + (netw[1] * netw[2]) + netw[1] + netw[2]  # num of weights and bias
 
         pos_w = np.ones((w_size, ))  # posterior of all weights and bias over all samples
@@ -256,9 +256,11 @@ class MCMC:
         np.savetxt(trainrmsefile, [rmsetrain])
         np.savetxt(testrmsefile, [rmsetest])
 
-        wprofile = open('./results/wprop.csv', 'a')
-        np.savetxt(wprofile, [w_proposal], fmt='%0.2f')
-        wprofile.close()
+        np.reshape(w_proposal, (1, w_proposal.shape[0]))
+        with open('./results/wprop.csv', 'w') as wprofile:
+            np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+
+
 
         trainacc_prev = trainacc
         testacc_prev = testacc
@@ -302,10 +304,15 @@ class MCMC:
 
                 print i, trainacc, rmsetrain
 
+
+                # print str([0])
+
+
                 # save arrays to file
-                wprofile = open('./results/wprop.csv', 'a')
-                np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%0.2f')
-                wprofile.close()
+                np.reshape(w_proposal, (1, w_proposal.shape[0]))
+                with open('./results/wprop.csv', 'a') as wprofile:
+                    np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+
                 np.savetxt(trainaccfile, [trainacc])
                 np.savetxt(testaccfile, [testacc])
                 np.savetxt(trainrmsefile, [rmsetrain])
@@ -319,9 +326,9 @@ class MCMC:
                 rmsetest_prev = rmsetest
 
             else:
-                wprofile = open('./results/wprop.csv', 'a')
-                np.savetxt(wprofile, [wpro_prev], delimiter=',')
-                wprofile.close()
+                np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
+                with open('./results/wprop.csv', 'a') as wprofile:
+                    np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
                 np.savetxt(trainaccfile, [trainacc_prev])
                 np.savetxt(testaccfile, [testacc_prev])
                 np.savetxt(trainrmsefile, [rmsetrain_prev])
@@ -373,7 +380,7 @@ if __name__ == '__main__':
     # traindata, testdata = getdata('./datasets/Iris/iris.csv', input)
     traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=',')
     testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-test.csv', delimiter=',')
-    print(traindata.shape)
+    # print(traindata.shape)
 
     # print(traindata.shape)
 

@@ -1,14 +1,23 @@
 import numpy as np
 
+file = open('results/wprop.csv', 'rb')
+lines = file.read().split('\n')[:-1]
 
-file = open('results/wprop.csv', 'r')
+numSamples = len(lines)
+w_size = len(lines[0].split(','))
 
-lines = file.readline()
-print(len(lines))
+weights = np.ones((numSamples, w_size))
+burnin = int(0.1 * numSamples)
 
-# weights = np.ones(())
-#
-#
-# for line in file.readlines():
-#
-# print weights
+
+for index in range(len(lines)):
+    line = lines[index]
+    # print(index, line)
+    w = np.array(list(map(float, line.split(','))))
+    # print(w, index)
+    weights[index, :] = w
+
+weights = weights[burnin:, :]
+w_mean = weights.mean(axis=0)
+w_std = np.std(weights, axis=0)
+
