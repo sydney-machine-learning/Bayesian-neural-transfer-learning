@@ -29,9 +29,8 @@ def convert_time(secs):
 
     return [mins, secs]
 
-# --------------------------------------------------------------------------
+# --------------------------------------------- Basic Neural Network Class ---------------------------------------------
 
-# An example of a class
 class Network:
     def __init__(self, Topo, Train, Test, learn_rate = 0.5, alpha = 0.1):
         self.Top = Topo  # NN topology [input, hidden, output]
@@ -145,7 +144,7 @@ class Network:
 
         return (sse / testSize, float(clasPerf) / testSize * 100)
 
-# --------------------------------------------------------------------------
+# ------------------------------------------------------- MCMC Class --------------------------------------------------
 class MCMC:
     def __init__(self, samples, traindata, testdata, topology):
         self.samples = samples  # NN topology [input, hidden, output]
@@ -254,7 +253,7 @@ class MCMC:
 
         w_proposal = w_pretrain
 
-        step_w = 0.02;  # defines how much variation you need in changes to w
+        step_w = 0.08  # defines how much variation you need in changes to w
 
         # --------------------- Declare FNN and initialize
 
@@ -279,10 +278,10 @@ class MCMC:
             with open('./results/wprop.csv', 'w') as wprofile:
                 np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
-            np.savetxt(trainaccfile, [trainacc])
-            np.savetxt(testaccfile, [testacc])
-            np.savetxt(trainrmsefile, [rmsetrain])
-            np.savetxt(testrmsefile, [rmsetest])
+        np.savetxt(trainaccfile, [trainacc])
+        np.savetxt(testaccfile, [testacc])
+        np.savetxt(trainrmsefile, [rmsetrain])
+        np.savetxt(testrmsefile, [rmsetest])
 
 
         trainacc_prev = trainacc
@@ -316,7 +315,7 @@ class MCMC:
                 # Update position
                 naccept += 1
                 likelihood = likelihood_proposal
-                prior_likelihood = prior_prop
+                prior = prior_prop
                 w = w_proposal
 
                 # print i, trainacc, rmsetrain
@@ -335,10 +334,10 @@ class MCMC:
                     with open('./results/wprop.csv', 'a') as wprofile:
                         np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
-                    np.savetxt(trainaccfile, [trainacc])
-                    np.savetxt(testaccfile, [testacc])
-                    np.savetxt(trainrmsefile, [rmsetrain])
-                    np.savetxt(testrmsefile, [rmsetest])
+                np.savetxt(trainaccfile, [trainacc])
+                np.savetxt(testaccfile, [testacc])
+                np.savetxt(trainrmsefile, [rmsetrain])
+                np.savetxt(testrmsefile, [rmsetest])
 
                 #save values into previous variables
                 wpro_prev = w_proposal
@@ -352,10 +351,10 @@ class MCMC:
                     np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
                     with open('./results/wprop.csv', 'a') as wprofile:
                         np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
-                    np.savetxt(trainaccfile, [trainacc_prev])
-                    np.savetxt(testaccfile, [testacc_prev])
-                    np.savetxt(trainrmsefile, [rmsetrain_prev])
-                    np.savetxt(testrmsefile, [rmsetest_prev])
+                np.savetxt(trainaccfile, [trainacc_prev])
+                np.savetxt(testaccfile, [testacc_prev])
+                np.savetxt(trainrmsefile, [rmsetrain_prev])
+                np.savetxt(testrmsefile, [rmsetest_prev])
 
         print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
@@ -375,7 +374,7 @@ class MCMC:
         self.rmse_test = np.genfromtxt('./results/testrmse.csv')
 
     def display_acc(self):
-        burnin = 0.1 * numSamples  # use post burn in samples
+        burnin = 0.1 * self.samples  # use post burn in samples
         self.get_acc()
         rmse_tr = np.mean(self.rmse_train[int(burnin):])
         rmsetr_std = np.std(self.rmse_train[int(burnin):])
@@ -418,7 +417,7 @@ class MCMC:
         plt.clf()
 
 
-# --------------------------------------------------------------------------
+# ------------------------------------------------------- Main --------------------------------------------------------
 
 if __name__ == '__main__':
 
@@ -431,37 +430,128 @@ if __name__ == '__main__':
     etol = 0.6
     alpha = 0.1
 
+    MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
+    c = 1.3
+
+
+    #--------------------------------------------- Train for the source task -------------------------------------------
     traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=',')
     testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-test.csv', delimiter=',')
 
-    MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
-    c = 1.0
+    random.seed(time.time())
+
+    numSamples = 20000# need to decide yourself
+
+    mcmc_white = MCMC(numSamples, traindata, testdata, topology)  # declare class
+
+    # # generate random weights
+    # w_random = np.random.randn(mcmc.wsize)
+    #
+    # # start sampling
+    # mcmc.sampler(w_random, transfer=True)
+    #
+    # # display train and test accuracies
+    # mcmc.display_acc()
+    #
+    # # Plot the accuracies and rmse
+    # mcmc.plot_acc('Wine-Quality-White')
+
+
+
+
+
+    #------------------------------- Transfer weights from trained network to Target Task ---------------------------------
+    w_transfer = mcmc_white.transfer(c)
+
+    # Train for the target task with transfer
+    traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+    testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+
+    random.seed(time.time())
+    numSamples = 10000  # need to decide yourself
+
+    # Create mcmc object for the target task
+    mcmc_red_trf = MCMC(numSamples, traindata, testdata, topology)
+
+    # start sampling
+    mcmc_red_trf.sampler(w_transfer, transfer=False)
+
+    # display train and test accuracies
+    mcmc_red_trf.display_acc()
+
+    # Plot the accuracies and rmse
+    # mcmc.plot_acc('Wine-Quality-red')
+
+    #------------------------------------------- Target Task Without Transfer-------------------------------------------
 
     random.seed(time.time())
 
-    numSamples = 6000# need to decide yourself
-
-    mcmc = MCMC(numSamples, traindata, testdata, topology)  # declare class
+    # Create mcmc object for the target task
+    mcmc_red = MCMC(numSamples, traindata, testdata, topology)
 
     # generate random weights
-    w_random = np.random.randn(mcmc.wsize)
+    w_random = np.random.randn(mcmc_red.wsize)
 
     # start sampling
-    mcmc.sampler(w_random, transfer=True)
+    mcmc_red.sampler(w_random, transfer=False)
 
     # display train and test accuracies
-    mcmc.display_acc()
-
-    # Plot the accuracies and rmse
-    mcmc.plot_acc('Wine-Quality-White')
+    mcmc_red.display_acc()
 
 
-    # Transfer weights from trained network
-    w_transfer = mcmc.transfer(c)
-    print(w_transfer)
+    # ----------------------------------------- Plot results of Transfer -----------------------------------------------
 
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.train_acc)), mcmc_red.train_acc, color='#FA7949', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.train_acc)), mcmc_red_trf.train_acc, color='#1A73B4', label="transfer")
 
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
 
+    plt.xlabel('Samples')
+    plt.ylabel('Accuracy')
+    plt.title('Wine Quality Red Train Accuracy plot')
+    plt.savefig('./results/accuracy-train-mcmc.png')
 
+    plt.clf()
 
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.test_acc)), mcmc_red.test_acc, color='#FA7949', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.test_acc)), mcmc_red_trf.test_acc, color='#1A73B4', label="transfer")
+
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('Accuracy')
+    plt.title('Wine Quality Red Test Accuracy plot')
+    plt.savefig('./results/accuracy-test-mcmc.png')
+
+    plt.clf()
+
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.rmse_train)), mcmc_red.rmse_train, 'b', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.rmse_train)), mcmc_red_trf.rmse_train, 'c', label="transfer")
+
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('RMSE')
+    plt.title('Wine Quality Red Train RMSE plot')
+    plt.savefig('./results/rmse-train-mcmc.png')
+    plt.clf()
+
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.rmse_test)), mcmc_red.rmse_test, 'b', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.rmse_test)), mcmc_red_trf.rmse_test, 'c', label="transfer")
+
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('RMSE')
+    plt.title('Wine Quality Red Test RMSE plot')
+    plt.savefig('./results/rmse-test-mcmc.png')
+    plt.clf()
 
