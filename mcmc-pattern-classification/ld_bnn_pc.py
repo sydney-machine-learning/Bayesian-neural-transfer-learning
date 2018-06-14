@@ -11,8 +11,8 @@ import os
 import sys
 
 
-sys.path.insert(0, '/home/arpit/Projects/Bayesian-neural-transfer-learning/preliminary/WineQualityDataset/preprocess/')
-from preprocess import getdata
+# sys.path.insert(0, '/home/arpit/Projects/Bayesian-neural-transfer-learning/preliminary/WineQualityDataset/preprocess/')
+# from preprocess import getdata
 
 
 # An example of a class
@@ -129,12 +129,12 @@ class Network:
 
 # --------------------------------------------------------------------------
 
-def covert_time(secs):
+def convert_time(secs):
     if secs >= 60:
-        mins = str(secs/60)
-        secs = str(secs%60)
+        mins = str(int(secs/60))
+        secs = str(int(secs%60))
     else:
-        secs = str(secs)
+        secs = str(int(secs))
         mins = str(00)
 
     if len(mins) == 1:
@@ -155,7 +155,15 @@ class MCMC:
         self.topology = topology  # max epocs
         self.traindata = traindata  #
         self.testdata = testdata
+        self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
         # ----------------
+
+    def softmax(self, fx):
+        ex = np.exp(fx)
+        sum_ex = np.sum(ex, axis = 1)
+        sum_ex = np.multiply(np.ones(ex.shape), sum_ex[:, np.newaxis])
+        prob = np.divide(ex, sum_ex)
+        return prob
 
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
@@ -177,8 +185,10 @@ class MCMC:
         for i in range(y_out.shape[0]):
             if out[i] == y_out[i]:
                 count += 1
-        acc = float(count) / y_out.shape[0] * 100
+        acc = float(count)/y_out.shape[0] * 100
+        # acc = 0
         return [loss, fx, rmse, acc]
+
 
     def prior_likelihood(self, sigma_squared, w):
         h = self.topology[1]  # number hidden neurons
@@ -188,11 +198,13 @@ class MCMC:
         log_loss = part1 - part2
         return log_loss
 
+
     def genweights(self, w_mean, w_std):
         w_prop = np.ones(w_mean.shape)
         for index in range(w_mean.shape[0]):
             w_prop[index] = np.random.normal(w_mean[index], w_std[index], 1)
         return w_prop
+
 
     def transfer(self, stdmulconst):
         file = open('knowledge/wprop.csv', 'rb')
@@ -213,265 +225,249 @@ class MCMC:
         return self.genweights(w_mean, w_std)
 
 
-    def sampler(self, w_limit, tau_limit, file):
+    def sampler(self, w_pretrain, w_limit, transfer = False):
 
-        start = time.time()
+        # Create file objects to write the attributes of the samples
+        trainaccfile = open('./knowledge/trainacc.csv', 'w')
+        testaccfile = open('./knowledge/testacc.csv', 'w')
+
+        trainrmsefile = open('./knowledge/trainrmse.csv', 'w')
+        testrmsefile = open('./knowledge/testrmse.csv', 'w')
+
 
         # ------------------- initialize MCMC
+
+        start = time.time()
         testsize = self.testdata.shape[0]
         trainsize = self.traindata.shape[0]
         samples = self.samples
-
 
         self.sgd_depth = 1
 
         x_test = np.linspace(0, 1, num=testsize)
         x_train = np.linspace(0, 1, num=trainsize)
 
+
+
         netw = self.topology  # [input, hidden, output]
         y_test = self.testdata[:, netw[0]:]
         y_train = self.traindata[:, netw[0]:]
-        # print y_train.shape
-        # print y_test.shape
 
-        w_size = (netw[0] * netw[1]) + (netw[1] * netw[2]) + netw[1] + netw[2]  # num of weights and bias
+        pos_w = np.ones((self.wsize, ))  # posterior of all weights and bias over all samples
 
-        pos_w = np.ones((samples, w_size))  # posterior of all weights and bias over all samples
 
-        fxtrain_samples = np.ones((samples, trainsize, netw[2]))  # fx of train data over all samples
-        fxtest_samples = np.ones((samples, testsize, netw[2]))  # fx of test data over all samples
-        rmse_train = np.zeros(samples)
-        rmse_test = np.zeros(samples)
+        w = w_pretrain
 
-        w = np.random.randn(w_size)
-        w_proposal = np.random.randn(w_size)
-
-        #step_w = 0.05;  # defines how much variation you need in changes to w
-        #step_eta = 0.2; # exp 0
-
+        w_proposal = w_pretrain
 
         step_w = w_limit  # defines how much variation you need in changes to w
+        learn_rate = 0.67
 
         # --------------------- Declare FNN and initialize
-        learn_rate = 0.5
 
         neuralnet = Network(self.topology, self.traindata, self.testdata, learn_rate)
-        # print 'evaluate Initial w'
 
         pred_train = neuralnet.evaluate_proposal(self.traindata, w)
         pred_test = neuralnet.evaluate_proposal(self.testdata, w)
 
 
-
-        eta = np.log(np.var(pred_train - y_train))
-        tau_pro = np.exp(eta)
-
         sigma_squared = 25
-        nu_1 = 0
-        nu_2 = 0
- 
 
-        sigma_diagmat = np.zeros((w_size, w_size))  # for Equation 9 in Ref [Chandra_ICONIP2017]
+        sigma_diagmat = np.zeros((self.wsize, self.wsize))
         np.fill_diagonal(sigma_diagmat, step_w)
 
-        delta_likelihood = 0.5 # an arbitrary position
+
+        prior = self.prior_likelihood(sigma_squared, w)  # takes care of the gradients
+
+        [likelihood, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w)
+        [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w)
 
 
-        prior_current = self.prior_likelihood(sigma_squared, w)  # takes care of the gradients
 
-        [likelihood, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w)
-        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w)
 
-        # print likelihood
+        if transfer:
+            np.reshape(w_proposal, (1, w_proposal.shape[0]))
+            with open('./knowledge/wprop.csv', 'w') as wprofile:
+                np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+
+        np.savetxt(trainaccfile, [trainacc])
+        np.savetxt(testaccfile, [testacc])
+        np.savetxt(trainrmsefile, [rmsetrain])
+        np.savetxt(testrmsefile, [rmsetest])
+
+
+        trainacc_prev = trainacc
+        testacc_prev = testacc
+        rmsetest_prev = rmsetest
+        rmsetrain_prev = rmsetrain
+        wpro_prev = w_proposal
 
         naccept = 0
         # print 'begin sampling using mcmc random walk'
-        # plt.plot(x_train, y_train)
-        # plt.plot(x_train, pred_train)
-        # plt.title("Plot of Data vs Initial Fx")
-        # plt.savefig('mcmcresults/begin.png')
-        # plt.clf()
-
-        #plt.plot(x_train, y_train)
-
 
         for i in range(samples - 1):
-            w_gd = neuralnet.langevin_gradient(self.traindata, w.copy(), self.sgd_depth) # Eq 8
-            # print(sum(w_gd))
-            w_proposal = w_gd  + np.random.normal(0, step_w, w_size) # Eq 7
+
+            w_gd = neuralnet.langevin_gradient(self.traindata, w.copy(), self.sgd_depth)  # Eq 8
+
+            w_proposal = w_gd + np.random.normal(0, step_w, self.wsize) # Eq 7
 
             w_prop_gd = neuralnet.langevin_gradient(self.traindata, w_proposal.copy(), self.sgd_depth)
 
-            # print(multivariate_normal.pdf(w, w_prop_gd, sigma_diagmat),multivariate_normal.pdf(w_proposal, w_gd, sigma_diagmat))
-
-            diff_prop =  np.log(multivariate_normal.pdf(w, w_prop_gd, sigma_diagmat)  - np.log(multivariate_normal.pdf(w_proposal, w_gd, sigma_diagmat)))
+            diff_prop = np.log(multivariate_normal.pdf(w, w_prop_gd, sigma_diagmat) - np.log(
+                multivariate_normal.pdf(w_proposal, w_gd, sigma_diagmat)))
 
             [likelihood_proposal, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w_proposal)
             [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w_proposal)
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
 
-            prior_prop = self.prior_likelihood(sigma_squared, nu_1, nu_2, w_proposal)  # takes care of the gradients
+            prior_prop = self.prior_likelihood(sigma_squared, w_proposal)  # takes care of the gradients
 
-
-            diff_prior = prior_prop - prior_current
             diff_likelihood = likelihood_proposal - likelihood
-            diff = min(700, diff_prior + diff_likelihood + diff_prop)
+            diff_prior = prior_prop - prior
 
-            # print()
-            # print(diff, i )
-            mh_prob = min(1, math.exp(diff))
-            # print(mh_prob)
-
-
-
+            mh_prob = min(700, (diff_likelihood + diff_prior + diff_prop))
+            mh_prob = min(1, math.exp(mh_prob))
 
             u = random.uniform(0, 1)
 
             if u < mh_prob:
                 # Update position
-                # print    i, ' is accepted sample'
                 naccept += 1
                 likelihood = likelihood_proposal
-                prior_current = prior_prop
+                prior = prior_prop
                 w = w_proposal
 
+                # print i, trainacc, rmsetrain
+                elapsed = convert_time(time.time() - start)
+                sys.stdout.write(
+                    '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                    + "\tTrain accuracy: " + str(trainacc)
+                    + " Train RMSE: "+ str(rmsetrain)
+                    + "\tTest accuracy: " + str(testacc)
+                    + " Test RMSE: " + str(rmsetest)
+                    + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
 
-                elapsed_time = ":".join(covert_time(int(time.time()-start)))
-                sys.stdout.write('\r' + file + ' : ' + str("{:.2f}".format(float(i) / (samples - 1) * 100)) + '% complete....'+" time elapsed: " + elapsed_time)
-                # print  likelihood, prior_current, diff_prop, rmsetrain, rmsetest, w, 'accepted'
-                #print w_proposal, 'w_proposal'
-                #print w_gd, 'w_gd'
+                # save arrays to file
+                if transfer:
+                    np.reshape(w_proposal, (1, w_proposal.shape[0]))
+                    with open('./knowledge/wprop.csv', 'a') as wprofile:
+                        np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
-                #print w_prop_gd, 'w_prop_gd'
+                np.savetxt(trainaccfile, [trainacc])
+                np.savetxt(testaccfile, [testacc])
+                np.savetxt(trainrmsefile, [rmsetrain])
+                np.savetxt(testrmsefile, [rmsetest])
 
-                pos_w[i + 1,] = w_proposal
-                fxtrain_samples[i + 1,] = pred_train
-                fxtest_samples[i + 1,] = pred_test
-                rmse_train[i + 1,] = rmsetrain
-                rmse_test[i + 1,] = rmsetest
-
-                #plt.plot(x_train, pred_train)
-
+                #save values into previous variables
+                wpro_prev = w_proposal
+                trainacc_prev = trainacc
+                testacc_prev = testacc
+                rmsetrain_prev = rmsetrain
+                rmsetest_prev = rmsetest
 
             else:
-                pos_w[i + 1,] = pos_w[i,]
-                fxtrain_samples[i + 1,] = fxtrain_samples[i,]
-                fxtest_samples[i + 1,] = fxtest_samples[i,]
-                rmse_train[i + 1,] = rmse_train[i,]
-                rmse_test[i + 1,] = rmse_test[i,]
+                if transfer:
+                    np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
+                    with open('./knowledge/wprop.csv', 'a') as wprofile:
+                        np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
+                np.savetxt(trainaccfile, [trainacc_prev])
+                np.savetxt(testaccfile, [testacc_prev])
+                np.savetxt(trainrmsefile, [rmsetrain_prev])
+                np.savetxt(testrmsefile, [rmsetest_prev])
 
-                # print i, 'rejected and retained'
-        sys.stdout.write('\r' + file + ' : 100% ..... Total Time: ' + ":".join(covert_time(int(time.time()-start))))
-        # print naccept, ' num accepted'
-        # print naccept / (samples * 1.0), '% was accepted'
+        print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
 
-        # plt.title("Plot of Accepted Proposals")
-        # plt.savefig('mcmcresults/proposals.png')
-        # plt.savefig('mcmcresults/proposals.svg', format='svg', dpi=600)
-        # plt.clf()
+        # Close the files
+        trainaccfile.close()
+        testaccfile.close()
+        trainrmsefile.close()
+        testrmsefile.close()
 
-        return (pos_w, fxtrain_samples, fxtest_samples, x_train, x_test, rmse_train, rmse_test, accept_ratio)
+        return (x_train, x_test, accept_ratio)
+
+    def get_acc(self):
+        self.train_acc = np.genfromtxt('./knowledge/trainacc.csv')
+        self.test_acc = np.genfromtxt('./knowledge/testacc.csv')
+        self.rmse_train = np.genfromtxt('./knowledge/trainrmse.csv')
+        self.rmse_test = np.genfromtxt('./knowledge/testrmse.csv')
+
+    def display_acc(self):
+        burnin = 0.1 * self.samples  # use post burn in samples
+        self.get_acc()
+        rmse_tr = np.mean(self.rmse_train[int(burnin):])
+        rmsetr_std = np.std(self.rmse_train[int(burnin):])
+
+        rmse_tes = np.mean(self.rmse_test[int(burnin):])
+        rmsetest_std = np.std(self.rmse_test[int(burnin):])
+
+        print "Train accuracy:"
+
+        print "Mean: " + str(np.mean(self.train_acc[int(burnin):]))
+        print "\nTest accuracy:"
+        print "Mean: " + str(np.mean(self.test_acc[int(burnin):]))
+
+    def plot_acc(self, dataset):
+        ax = plt.subplot(111)
+        plt.plot(range(len(self.train_acc)), self.train_acc, 'g', label="train")
+        plt.plot(range(len(self.test_acc)), self.test_acc, 'm', label="test")
+
+        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+        leg.get_frame().set_alpha(0.5)
+
+        plt.xlabel('Samples')
+        plt.ylabel('Accuracy')
+        plt.title(dataset + ' Accuracy plot')
+        plt.savefig('./results/accuracy'+ dataset+'-mcmc.png')
+
+        plt.clf()
+
+        ax = plt.subplot(111)
+        plt.plot(range(len(self.rmse_train)), self.rmse_train, 'b.', label="train-rmse")
+        plt.plot(range(len(self.rmse_test)), self.rmse_test, 'c.', label="test-rmse")
+
+        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+        leg.get_frame().set_alpha(0.5)
+
+        plt.xlabel('Samples')
+        plt.ylabel('RMSE')
+        plt.title(dataset+' RMSE plot')
+        plt.savefig('./results/rmse-'+dataset+'-mcmc.png')
+        plt.clf()
 
 
 def main():
-    x = 3
+
     input = 11
     hidden = 94
-    output = 4
+    output = 10
 
-    if x == 3:
-        w_limit =  0.02
-        tau_limit = 0.2
-    #if x == 4:
-        #w_limit =  0.02
-        #tau_limit = 0.1
 
 
     #if os.path.isfile("Results/"+filenames[problem]+"_rmse.txt"):
     #    print filenames[problem]
     #    continue
 
-    traindata, testdata = getdata('WineQualityDataset/winequality-white.csv')
+    traindata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=',')
+    testdata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-test.csv', delimiter=',')
+
 
     topology = [input, hidden, output]
 
     random.seed(time.time())
 
-    numSamples = 8000   # need to decide yourself
+    numSamples = 1000   # need to decide yourself
 
     mcmc = MCMC(numSamples, traindata, testdata, topology)  # declare class
 
-    [pos_w, pos_tau, fx_train, fx_test, x_train, x_test, rmse_train, rmse_test, accept_ratio] = mcmc.sampler(w_limit, tau_limit, 'winequality-white')
-    print '\nsucessfully sampled: '+ str(accept_ratio)+ ' samples accepted'
+    # generate random weights
+    w_random = np.random.randn(mcmc.wsize)
+
+    # start sampling
+    mcmc.sampler(w_random, w_limit=0.05, transfer=True)
 
     burnin = 0.1 * numSamples  # use post burn in samples
-
-    pos_w = pos_w[int(burnin):, ]
-    pos_tau = pos_tau[int(burnin):, ]
-
-    print("fx shape:"+str(fx_test.shape))
-    print("fx_train shape:"+ str(fx_train.shape))
-
-    fx_mu = fx_test.mean(axis=0)
-    fx_high = np.percentile(fx_test, 95, axis=0)
-    fx_low = np.percentile(fx_test, 5, axis=0)
-
-    fx_mu_tr = fx_train.mean(axis=0)
-    fx_high_tr = np.percentile(fx_train, 95, axis=0)
-    fx_low_tr = np.percentile(fx_train, 5, axis=0)
-
-    pos_w_mean = pos_w.mean(axis=0)
-    # np.savetxt(outpos_w, pos_w_mean, fmt='%1.5f')
-
-
-    rmse_tr = np.mean(rmse_train[int(burnin):])
-    rmsetr_std = np.std(rmse_train[int(burnin):])
-    rmse_tes = np.mean(rmse_test[int(burnin):])
-    rmsetest_std = np.std(rmse_test[int(burnin):])
-    # print rmse_tr, rmsetr_std, rmse_tes, rmsetest_std
-    # np.savetxt(outres, (rmse_tr, rmsetr_std, rmse_tes, rmsetest_std, accept_ratio), fmt='%1.5f')
-
-    ytestdata = testdata[:, input:]
-    ytraindata = traindata[:, input:]
-
-    train_acc = []
-    test_acc = []
-
-    for fx in fx_train:
-        count = 0
-        for index in range(fx.shape[0]):
-            if np.allclose(fx[index],ytraindata[index],atol = 0.2):
-                count += 1
-        train_acc.append(float(count)/fx.shape[0]*100)
-
-    for fx in fx_test:
-        count = 0
-        for index in range(fx.shape[0]):
-            if np.allclose(fx[index],ytestdata[index],atol = 0.5):
-                count += 1
-        test_acc.append(float(count)/fx.shape[0]*100)
-
-
-    train_acc = np.array(train_acc[int(burnin):])
-    train_std = np.std(train_acc[int(burnin):])
-
-    test_acc = np.array(test_acc[int(burnin):])
-    test_std = np.std(test_acc[int(burnin):])
-
-    train_acc_mu = train_acc.mean()
-    test_acc_mu = test_acc.mean()
-
-    train_accs = train_acc_mu
-    test_accs = test_acc_mu
-    train_stds = train_std
-    test_stds = test_std
-
-    print("Train acc: " + str(train_acc_mu))
-    print("Test acc: " + str(test_acc_mu))
-    with open("File.txt", 'w') as file:
-        file.write(str(train_acc_mu)+ " " + str(test_acc_mu))
 
 
 
