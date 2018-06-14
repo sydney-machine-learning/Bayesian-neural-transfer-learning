@@ -419,7 +419,7 @@ class MCMC:
         plt.xlabel('Samples')
         plt.ylabel('Accuracy')
         plt.title(dataset + ' Accuracy plot')
-        plt.savefig('./results/accuracy'+ dataset+'-mcmc.png')
+        plt.savefig('./results/accuracy-'+ dataset+'-mcmc.png')
 
         plt.clf()
 
@@ -440,7 +440,7 @@ class MCMC:
 def main():
 
     input = 11
-    hidden = 94
+    hidden = 50
     output = 10
 
 
@@ -466,6 +466,8 @@ def main():
 
     # start sampling
     mcmc.sampler(w_random, w_limit=0.05, transfer=True)
+    mcmc.get_acc()
+    mcmc.plot_acc('winewhite-langevin')
 
     burnin = 0.1 * numSamples  # use post burn in samples
 

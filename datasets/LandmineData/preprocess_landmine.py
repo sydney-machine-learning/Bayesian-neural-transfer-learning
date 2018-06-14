@@ -13,14 +13,24 @@ labels = dataset['label']
 for index in range(dataset['feature'].shape[1]):
     sc_X = StandardScaler()
     x = sc_X.fit_transform(features[0,index])
-    features[0,index] = normalize(x, norm='l2')
+    x = normalize(x, norm='l2')
 
-    X_train, X_test, y_train, y_test = train_test_split(features[0, index], labels[0, index], test_size = 0.25, random_state = 0)
+    col = np.zeros((labels[0, index].shape[0], 1))
+    y = labels[0, index]
+
+    for itr in range(y.shape[0]):
+        if y[itr, 0] == 1:
+            col[itr, 0] = 0
+        else:
+            col[itr, 0] = 1
+
+    y = np.c_[y, col]
+
+
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.25, random_state = 0)
 
     traindata = np.c_[X_train,y_train]
     testdata = np.c_[X_test, y_test]
-
-    os.mkdir('tasks/task'+str(index+1))
 
     with open('tasks/task'+str(index+1)+'/train.csv', 'w') as target:
          np.savetxt(target, traindata, delimiter=',')

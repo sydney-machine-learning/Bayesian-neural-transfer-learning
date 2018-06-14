@@ -222,14 +222,18 @@ class MCMC:
         return self.genweights(w_mean, w_std)
 
 
-    def sampler(self, w_pretrain, transfer = False):
+    def sampler(self, w_pretrain, directory, transfer=False):
 
         # Create file objects to write the attributes of the samples
-        trainaccfile = open('./knowledge/trainacc.csv', 'w')
-        testaccfile = open('./knowledge/testacc.csv', 'w')
+        self.directory = directory
+        if not os.path.isdir(self.directory):
+            os.mkdir(self.directory)
 
-        trainrmsefile = open('./knowledge/trainrmse.csv', 'w')
-        testrmsefile = open('./knowledge/testrmse.csv', 'w')
+        trainaccfile = open(self.directory+'/trainacc.csv', 'w')
+        testaccfile = open(self.directory+'/testacc.csv', 'w')
+
+        trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
+        testrmsefile = open(self.directory+'/testrmse.csv', 'w')
 
 
         # ------------------- initialize MCMC
@@ -277,7 +281,7 @@ class MCMC:
 
         if transfer:
             np.reshape(w_proposal, (1, w_proposal.shape[0]))
-            with open('./knowledge/wprop.csv', 'w') as wprofile:
+            with open(self.directory+'/wprop.csv', 'w') as wprofile:
                 np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
         np.savetxt(trainaccfile, [trainacc])
@@ -329,11 +333,12 @@ class MCMC:
                     + "\tTest accuracy: " + str(testacc)
                     + " Test RMSE: " + str(rmsetest)
                     + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
+                print ""
 
                 # save arrays to file
                 if transfer:
                     np.reshape(w_proposal, (1, w_proposal.shape[0]))
-                    with open('./knowledge/wprop.csv', 'a') as wprofile:
+                    with open(self.directory+'/wprop.csv', 'w') as wprofile:
                         np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
                 np.savetxt(trainaccfile, [trainacc])
@@ -351,7 +356,7 @@ class MCMC:
             else:
                 if transfer:
                     np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
-                    with open('./knowledge/wprop.csv', 'a') as wprofile:
+                    with open(self.directory+'/wprop.csv', 'w') as wprofile:
                         np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
                 np.savetxt(trainaccfile, [trainacc_prev])
                 np.savetxt(testaccfile, [testacc_prev])
@@ -370,10 +375,10 @@ class MCMC:
         return (x_train, x_test, accept_ratio)
 
     def get_acc(self):
-        self.train_acc = np.genfromtxt('./knowledge/trainacc.csv')
-        self.test_acc = np.genfromtxt('./knowledge/testacc.csv')
-        self.rmse_train = np.genfromtxt('./knowledge/trainrmse.csv')
-        self.rmse_test = np.genfromtxt('./knowledge/testrmse.csv')
+        self.train_acc = np.genfromtxt(self.directory+'/trainacc.csv')
+        self.test_acc = np.genfromtxt(self.directory+'/testacc.csv')
+        self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
+        self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
 
     def display_acc(self):
         burnin = 0.1 * self.samples  # use post burn in samples
@@ -391,9 +396,12 @@ class MCMC:
         print "Mean: " + str(np.mean(self.test_acc[int(burnin):]))
 
     def plot_acc(self, dataset):
+        if not os.path.isdir(self.directory+'/results'):
+            os.mkdir(self.directory+'/results')
+
         ax = plt.subplot(111)
-        plt.plot(range(len(self.train_acc)), self.train_acc, 'g', label="train")
-        plt.plot(range(len(self.test_acc)), self.test_acc, 'm', label="test")
+        plt.plot(range(len(self.train_acc)), self.train_acc, '.' , color='#FA7949', label="train")
+        plt.plot(range(len(self.test_acc)), self.test_acc, '.', color='#1A73B4', label="test")
 
         leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
         leg.get_frame().set_alpha(0.5)
@@ -401,7 +409,7 @@ class MCMC:
         plt.xlabel('Samples')
         plt.ylabel('Accuracy')
         plt.title(dataset + ' Accuracy plot')
-        plt.savefig('./results/accuracy'+ dataset+'-mcmc.png')
+        plt.savefig(self.directory+'/results/accuracy'+ dataset+'-mcmc.png')
 
         plt.clf()
 
@@ -415,7 +423,7 @@ class MCMC:
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' RMSE plot')
-        plt.savefig('./results/rmse-'+dataset+'-mcmc.png')
+        plt.savefig(self.directory+'/results/rmse-'+dataset+'-mcmc.png')
         plt.clf()
 
 
@@ -423,9 +431,9 @@ class MCMC:
 
 if __name__ == '__main__':
 
-    input = 11
-    hidden = 94
-    output = 10
+    input = 9
+    hidden = 16
+    output = 2
     topology = [input, hidden, output]
 
     etol_tr = 0.2
@@ -435,125 +443,128 @@ if __name__ == '__main__':
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
     c = 1.2
 
+    numTasks = 29
 
     #--------------------------------------------- Train for the source task -------------------------------------------
-    traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=',')
-    testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-test.csv', delimiter=',')
 
-    random.seed(time.time())
+    for taskindex in range(1, numTasks+1):
+        taskindex = str(taskindex)
+        traindata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/train.csv', delimiter=',')
+        testdata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/test.csv', delimiter=',')
 
-    numSamples = 20000# need to decide yourself
+        random.seed(time.time())
 
-    mcmc_white = MCMC(numSamples, traindata, testdata, topology)  # declare class
+        numSamples = 1000# need to decide yourself
 
-    # # generate random weights
-    # w_random = np.random.randn(mcmc.wsize)
+        mcmc_task = MCMC(numSamples, traindata, testdata, topology)  # declare class
+
+        # generate random weights
+        w_random = np.random.randn(mcmc_task.wsize)
+
+        # start sampling
+        mcmc_task.sampler(w_random, transfer=True, directory='task'+taskindex)
+
+        # display train and test accuracies
+        mcmc_task.display_acc()
+
+        # Plot the accuracies and rmse
+        mcmc_task.plot_acc('Landmine detection Task '+taskindex)
+
+
+
+
+
+    # #------------------------------- Transfer weights from trained network to Target Task ---------------------------------
+    # w_transfer = mcmc_white.transfer(c)
+    #
+    # # Train for the target task with transfer
+    # traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+    # testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+    #
+    # random.seed(time.time())
+    # numSamples = 10000  # need to decide yourself
+    #
+    # # Create mcmc object for the target task
+    # mcmc_red_trf = MCMC(numSamples, traindata, testdata, topology)
     #
     # # start sampling
-    # mcmc.sampler(w_random, transfer=True)
+    # mcmc_red_trf.sampler(w_transfer, transfer=False)
     #
     # # display train and test accuracies
-    # mcmc.display_acc()
+    # mcmc_red_trf.display_acc()
     #
     # # Plot the accuracies and rmse
-    # mcmc.plot_acc('Wine-Quality-White')
-
-
-
-
-
-    #------------------------------- Transfer weights from trained network to Target Task ---------------------------------
-    w_transfer = mcmc_white.transfer(c)
-
-    # Train for the target task with transfer
-    traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
-    testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-
-    random.seed(time.time())
-    numSamples = 10000  # need to decide yourself
-
-    # Create mcmc object for the target task
-    mcmc_red_trf = MCMC(numSamples, traindata, testdata, topology)
-
-    # start sampling
-    mcmc_red_trf.sampler(w_transfer, transfer=False)
-
-    # display train and test accuracies
-    mcmc_red_trf.display_acc()
-
-    # Plot the accuracies and rmse
-    # mcmc.plot_acc('Wine-Quality-red')
-
-    #------------------------------------------- Target Task Without Transfer-------------------------------------------
-
-    random.seed(time.time())
-
-    # Create mcmc object for the target task
-    mcmc_red = MCMC(numSamples, traindata, testdata, topology)
-
-    # generate random weights
-    w_random = np.random.randn(mcmc_red.wsize)
-
-    # start sampling
-    mcmc_red.sampler(w_random, transfer=False)
-
-    # display train and test accuracies
-    mcmc_red.display_acc()
-
-
-    # ----------------------------------------- Plot results of Transfer -----------------------------------------------
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_red.train_acc)), mcmc_red.train_acc, color='#FA7949', label="no-transfer")
-    plt.plot(range(len(mcmc_red_trf.train_acc)), mcmc_red_trf.train_acc, color='#1A73B4', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('Accuracy')
-    plt.title('Wine Quality Red Train Accuracy plot')
-    plt.savefig('./results/accuracy-train-mcmc.png')
-
-    plt.clf()
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_red.test_acc)), mcmc_red.test_acc, color='#FA7949', label="no-transfer")
-    plt.plot(range(len(mcmc_red_trf.test_acc)), mcmc_red_trf.test_acc, color='#1A73B4', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('Accuracy')
-    plt.title('Wine Quality Red Test Accuracy plot')
-    plt.savefig('./results/accuracy-test-mcmc.png')
-
-    plt.clf()
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_red.rmse_train)), mcmc_red.rmse_train, 'b', label="no-transfer")
-    plt.plot(range(len(mcmc_red_trf.rmse_train)), mcmc_red_trf.rmse_train, 'c', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('RMSE')
-    plt.title('Wine Quality Red Train RMSE plot')
-    plt.savefig('./results/rmse-train-mcmc.png')
-    plt.clf()
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_red.rmse_test)), mcmc_red.rmse_test, 'b', label="no-transfer")
-    plt.plot(range(len(mcmc_red_trf.rmse_test)), mcmc_red_trf.rmse_test, 'c', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('RMSE')
-    plt.title('Wine Quality Red Test RMSE plot')
-    plt.savefig('./results/rmse-test-mcmc.png')
-    plt.clf()
-
+    # # mcmc.plot_acc('Wine-Quality-red')
+    #
+    # #------------------------------------------- Target Task Without Transfer-------------------------------------------
+    #
+    # random.seed(time.time())
+    #
+    # # Create mcmc object for the target task
+    # mcmc_red = MCMC(numSamples, traindata, testdata, topology)
+    #
+    # # generate random weights
+    # w_random = np.random.randn(mcmc_red.wsize)
+    #
+    # # start sampling
+    # mcmc_red.sampler(w_random, transfer=False)
+    #
+    # # display train and test accuracies
+    # mcmc_red.display_acc()
+    #
+    #
+    # # ----------------------------------------- Plot results of Transfer -----------------------------------------------
+    #
+    # ax = plt.subplot(111)
+    # plt.plot(range(len(mcmc_red.train_acc)), mcmc_red.train_acc, color='#FA7949', label="no-transfer")
+    # plt.plot(range(len(mcmc_red_trf.train_acc)), mcmc_red_trf.train_acc, color='#1A73B4', label="transfer")
+    #
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Samples')
+    # plt.ylabel('Accuracy')
+    # plt.title('Wine Quality Red Train Accuracy plot')
+    # plt.savefig('./results/accuracy-train-mcmc.png')
+    #
+    # plt.clf()
+    #
+    # ax = plt.subplot(111)
+    # plt.plot(range(len(mcmc_red.test_acc)), mcmc_red.test_acc, color='#FA7949', label="no-transfer")
+    # plt.plot(range(len(mcmc_red_trf.test_acc)), mcmc_red_trf.test_acc, color='#1A73B4', label="transfer")
+    #
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Samples')
+    # plt.ylabel('Accuracy')
+    # plt.title('Wine Quality Red Test Accuracy plot')
+    # plt.savefig('./results/accuracy-test-mcmc.png')
+    #
+    # plt.clf()
+    #
+    # ax = plt.subplot(111)
+    # plt.plot(range(len(mcmc_red.rmse_train)), mcmc_red.rmse_train, 'b', label="no-transfer")
+    # plt.plot(range(len(mcmc_red_trf.rmse_train)), mcmc_red_trf.rmse_train, 'c', label="transfer")
+    #
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Samples')
+    # plt.ylabel('RMSE')
+    # plt.title('Wine Quality Red Train RMSE plot')
+    # plt.savefig('./results/rmse-train-mcmc.png')
+    # plt.clf()
+    #
+    # ax = plt.subplot(111)
+    # plt.plot(range(len(mcmc_red.rmse_test)), mcmc_red.rmse_test, 'b', label="no-transfer")
+    # plt.plot(range(len(mcmc_red_trf.rmse_test)), mcmc_red_trf.rmse_test, 'c', label="transfer")
+    #
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Samples')
+    # plt.ylabel('RMSE')
+    # plt.title('Wine Quality Red Test RMSE plot')
+    # plt.savefig('./results/rmse-test-mcmc.png')
+    # plt.clf()
