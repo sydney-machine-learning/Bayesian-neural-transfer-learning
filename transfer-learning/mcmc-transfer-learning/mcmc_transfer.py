@@ -115,6 +115,8 @@ class Network:
 
         return fx
 
+
+
     def TestNetwork(self, phase, erTolerance):
         Input = np.zeros((1, self.Top[0]))  # temp hold input
         Desired = np.zeros((1, self.Top[2]))
@@ -202,7 +204,7 @@ class MCMC:
 
 
     def transfer(self, stdmulconst):
-        file = open('results/wprop.csv', 'rb')
+        file = open('knowledge/wprop.csv', 'rb')
         lines = file.read().split('\n')[:-1]
 
         weights = np.ones((self.samples, self.wsize))
@@ -223,11 +225,11 @@ class MCMC:
     def sampler(self, w_pretrain, transfer = False):
 
         # Create file objects to write the attributes of the samples
-        trainaccfile = open('./results/trainacc.csv', 'w')
-        testaccfile = open('./results/testacc.csv', 'w')
+        trainaccfile = open('./knowledge/trainacc.csv', 'w')
+        testaccfile = open('./knowledge/testacc.csv', 'w')
 
-        trainrmsefile = open('./results/trainrmse.csv', 'w')
-        testrmsefile = open('./results/testrmse.csv', 'w')
+        trainrmsefile = open('./knowledge/trainrmse.csv', 'w')
+        testrmsefile = open('./knowledge/testrmse.csv', 'w')
 
 
         # ------------------- initialize MCMC
@@ -253,7 +255,7 @@ class MCMC:
 
         w_proposal = w_pretrain
 
-        step_w = 0.08  # defines how much variation you need in changes to w
+        step_w = 0.02  # defines how much variation you need in changes to w
 
         # --------------------- Declare FNN and initialize
 
@@ -275,7 +277,7 @@ class MCMC:
 
         if transfer:
             np.reshape(w_proposal, (1, w_proposal.shape[0]))
-            with open('./results/wprop.csv', 'w') as wprofile:
+            with open('./knowledge/wprop.csv', 'w') as wprofile:
                 np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
         np.savetxt(trainaccfile, [trainacc])
@@ -331,7 +333,7 @@ class MCMC:
                 # save arrays to file
                 if transfer:
                     np.reshape(w_proposal, (1, w_proposal.shape[0]))
-                    with open('./results/wprop.csv', 'a') as wprofile:
+                    with open('./knowledge/wprop.csv', 'a') as wprofile:
                         np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
                 np.savetxt(trainaccfile, [trainacc])
@@ -349,7 +351,7 @@ class MCMC:
             else:
                 if transfer:
                     np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
-                    with open('./results/wprop.csv', 'a') as wprofile:
+                    with open('./knowledge/wprop.csv', 'a') as wprofile:
                         np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
                 np.savetxt(trainaccfile, [trainacc_prev])
                 np.savetxt(testaccfile, [testacc_prev])
@@ -368,10 +370,10 @@ class MCMC:
         return (x_train, x_test, accept_ratio)
 
     def get_acc(self):
-        self.train_acc = np.genfromtxt('./results/trainacc.csv')
-        self.test_acc = np.genfromtxt('./results/testacc.csv')
-        self.rmse_train = np.genfromtxt('./results/trainrmse.csv')
-        self.rmse_test = np.genfromtxt('./results/testrmse.csv')
+        self.train_acc = np.genfromtxt('./knowledge/trainacc.csv')
+        self.test_acc = np.genfromtxt('./knowledge/testacc.csv')
+        self.rmse_train = np.genfromtxt('./knowledge/trainrmse.csv')
+        self.rmse_test = np.genfromtxt('./knowledge/testrmse.csv')
 
     def display_acc(self):
         burnin = 0.1 * self.samples  # use post burn in samples
@@ -382,10 +384,10 @@ class MCMC:
         rmse_tes = np.mean(self.rmse_test[int(burnin):])
         rmsetest_std = np.std(self.rmse_test[int(burnin):])
 
-        print "Train accuracy:\n"
+        print "Train accuracy:"
 
         print "Mean: " + str(np.mean(self.train_acc[int(burnin):]))
-        print "Test accuracy:\n"
+        print "\nTest accuracy:"
         print "Mean: " + str(np.mean(self.test_acc[int(burnin):]))
 
     def plot_acc(self, dataset):
@@ -431,7 +433,7 @@ if __name__ == '__main__':
     alpha = 0.1
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
-    c = 1.3
+    c = 1.2
 
 
     #--------------------------------------------- Train for the source task -------------------------------------------

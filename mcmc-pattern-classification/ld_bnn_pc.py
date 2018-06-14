@@ -160,20 +160,58 @@ class MCMC:
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
 
-    def likelihood_func(self, neuralnet, data, w, tausq):
+    def likelihood_func(self, neuralnet, data, w):
         y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
         rmse = self.rmse(fx, y)
-        loss = -0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq
-        return [np.sum(loss), fx, rmse]
+        prob = self.softmax(fx)
+        loss = 0
+        for i in range(y.shape[0]):
+            for j in range(y.shape[1]):
+                if y[i, j] == 1:
+                    loss += np.log(prob[i, j] + 0.0001)
 
-    def prior_likelihood(self, sigma_squared, nu_1, nu_2, w, tausq):
+        out = np.argmax(fx, axis=1)
+        y_out = np.argmax(y, axis=1)
+        count = 0
+        for i in range(y_out.shape[0]):
+            if out[i] == y_out[i]:
+                count += 1
+        acc = float(count) / y_out.shape[0] * 100
+        return [loss, fx, rmse, acc]
+
+    def prior_likelihood(self, sigma_squared, w):
         h = self.topology[1]  # number hidden neurons
         d = self.topology[0]  # number input neurons
         part1 = -1 * ((d * h + h + 2) / 2) * np.log(sigma_squared)
         part2 = 1 / (2 * sigma_squared) * (sum(np.square(w)))
         log_loss = part1 - part2
         return log_loss
+
+    def genweights(self, w_mean, w_std):
+        w_prop = np.ones(w_mean.shape)
+        for index in range(w_mean.shape[0]):
+            w_prop[index] = np.random.normal(w_mean[index], w_std[index], 1)
+        return w_prop
+
+    def transfer(self, stdmulconst):
+        file = open('knowledge/wprop.csv', 'rb')
+        lines = file.read().split('\n')[:-1]
+
+        weights = np.ones((self.samples, self.wsize))
+        burnin = int(0.1 * self.samples)
+
+        for index in range(len(lines)):
+            line = lines[index]
+            w = np.array(list(map(float, line.split(','))))
+            # print(w.shape)
+            weights[index, :] = w
+
+        weights = weights[burnin:, :]
+        w_mean = weights.mean(axis=0)
+        w_std = stdmulconst * np.std(weights, axis=0)
+        return self.genweights(w_mean, w_std)
+
 
     def sampler(self, w_limit, tau_limit, file):
 
@@ -199,7 +237,6 @@ class MCMC:
         w_size = (netw[0] * netw[1]) + (netw[1] * netw[2]) + netw[1] + netw[2]  # num of weights and bias
 
         pos_w = np.ones((samples, w_size))  # posterior of all weights and bias over all samples
-        pos_tau = np.ones((samples, 1))
 
         fxtrain_samples = np.ones((samples, trainsize, netw[2]))  # fx of train data over all samples
         fxtest_samples = np.ones((samples, testsize, netw[2]))  # fx of test data over all samples
@@ -214,7 +251,7 @@ class MCMC:
 
 
         step_w = w_limit  # defines how much variation you need in changes to w
-        step_eta = tau_limit #exp 1
+
         # --------------------- Declare FNN and initialize
         learn_rate = 0.5
 
@@ -240,10 +277,10 @@ class MCMC:
         delta_likelihood = 0.5 # an arbitrary position
 
 
-        prior_current = self.prior_likelihood(sigma_squared, nu_1, nu_2, w, tau_pro)  # takes care of the gradients
+        prior_current = self.prior_likelihood(sigma_squared, w)  # takes care of the gradients
 
-        [likelihood, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w, tau_pro)
-        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w, tau_pro)
+        [likelihood, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w)
+        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w)
 
         # print likelihood
 
@@ -269,18 +306,12 @@ class MCMC:
 
             diff_prop =  np.log(multivariate_normal.pdf(w, w_prop_gd, sigma_diagmat)  - np.log(multivariate_normal.pdf(w_proposal, w_gd, sigma_diagmat)))
 
-            eta_pro = eta + np.random.normal(0, step_eta, 1)
-            tau_pro = math.exp(eta_pro)
-
-            [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w_proposal,
-                                                                                tau_pro)
-            [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w_proposal,
-                                                                            tau_pro)
+            [likelihood_proposal, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w_proposal)
+            [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w_proposal)
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
 
-            prior_prop = self.prior_likelihood(sigma_squared, nu_1, nu_2, w_proposal,
-                                               tau_pro)  # takes care of the gradients
+            prior_prop = self.prior_likelihood(sigma_squared, nu_1, nu_2, w_proposal)  # takes care of the gradients
 
 
             diff_prior = prior_prop - prior_current
@@ -304,7 +335,7 @@ class MCMC:
                 likelihood = likelihood_proposal
                 prior_current = prior_prop
                 w = w_proposal
-                eta = eta_pro
+
 
                 elapsed_time = ":".join(covert_time(int(time.time()-start)))
                 sys.stdout.write('\r' + file + ' : ' + str("{:.2f}".format(float(i) / (samples - 1) * 100)) + '% complete....'+" time elapsed: " + elapsed_time)
@@ -315,7 +346,6 @@ class MCMC:
                 #print w_prop_gd, 'w_prop_gd'
 
                 pos_w[i + 1,] = w_proposal
-                pos_tau[i + 1,] = tau_pro
                 fxtrain_samples[i + 1,] = pred_train
                 fxtest_samples[i + 1,] = pred_test
                 rmse_train[i + 1,] = rmsetrain
@@ -326,7 +356,6 @@ class MCMC:
 
             else:
                 pos_w[i + 1,] = pos_w[i,]
-                pos_tau[i + 1,] = pos_tau[i,]
                 fxtrain_samples[i + 1,] = fxtrain_samples[i,]
                 fxtest_samples[i + 1,] = fxtest_samples[i,]
                 rmse_train[i + 1,] = rmse_train[i,]
@@ -343,7 +372,7 @@ class MCMC:
         # plt.savefig('mcmcresults/proposals.svg', format='svg', dpi=600)
         # plt.clf()
 
-        return (pos_w, pos_tau, fxtrain_samples, fxtest_samples, x_train, x_test, rmse_train, rmse_test, accept_ratio)
+        return (pos_w, fxtrain_samples, fxtest_samples, x_train, x_test, rmse_train, rmse_test, accept_ratio)
 
 
 def main():
