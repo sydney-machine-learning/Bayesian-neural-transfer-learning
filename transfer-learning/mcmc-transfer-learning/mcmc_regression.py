@@ -229,6 +229,7 @@ class MCMC:
         y_test = self.testdata[:, netw[0]:]
         y_train = self.traindata[:, netw[0]:]
 
+
         pos_w = np.ones((self.wsize, ))  # posterior of all weights and bias over all samples
 
         fxtrain_samples = np.ones((samples, trainsize, netw[2]))  # fx of train data over all samples
@@ -322,12 +323,12 @@ class MCMC:
 
                 # print i, trainacc, rmsetrain
                 elapsed = convert_time(time.time() - start)
-                sys.stdout.write(
-                    '\rSamples: ' + str(i + 2) + "/" + str(samples)
-                    + " Train RMSE: "+ str(rmsetrain)
-                    + " Test RMSE: " + str(rmsetest)
-                    + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
-                print ""
+                # sys.stdout.write(
+                #     '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                #     + " Train RMSE: "+ str(rmsetrain)
+                #     + " Test RMSE: " + str(rmsetest)
+                #     + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
+                # print ""
 
                 # save arrays to file
                 if transfer:
@@ -335,8 +336,9 @@ class MCMC:
                     with open(self.directory+'/wprop.csv', 'w') as wprofile:
                         np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
-                fxtrain_samples[i + 1,] = pred_train
-                fxtest_samples[i + 1,] = pred_test
+                print(pred_train[0], y_train[0])
+                fxtrain_samples[i + 1, :, :] = pred_train[:,  :]
+                fxtest_samples[i + 1, :, :] = pred_test[:, :]
                 np.savetxt(trainrmsefile, [rmsetrain])
                 np.savetxt(testrmsefile, [rmsetest])
 
@@ -350,8 +352,8 @@ class MCMC:
                     np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
                     with open(self.directory+'/wprop.csv', 'w') as wprofile:
                         np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
-                fxtrain_samples[i + 1,] = fxtrain_samples[i,]
-                fxtest_samples[i + 1,] = fxtest_samples[i,]
+                fxtrain_samples[i + 1,:, :] = fxtrain_samples[i, :, :]
+                fxtest_samples[i + 1,:, :] = fxtest_samples[i, :, :]
                 np.savetxt(trainrmsefile, [rmsetrain_prev])
                 np.savetxt(testrmsefile, [rmsetest_prev])
 
@@ -409,8 +411,8 @@ class MCMC:
 if __name__ == '__main__':
 
     input = 520
-    hidden = 20
-    output = 2
+    hidden = 25
+    output = 1
     topology = [input, hidden, output]
 
     etol_tr = 0.2
@@ -424,11 +426,13 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    traindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/22.csv', delimiter=',')
-    testdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/22.csv', delimiter=',')
+    traindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/01.csv', delimiter=',')
+    testdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/01.csv', delimiter=',')
 
-    traindata = traindata[:, :-2]
-    testdata = testdata[:, :-2]
+    print traindata.shape, testdata.shape
+
+    traindata = traindata[:, :-3]
+    testdata = testdata[:, :-3]
 
     y_train = traindata[:, input:]
     y_test = testdata[:, input:]
@@ -445,13 +449,13 @@ if __name__ == '__main__':
     w_random = np.random.randn(mcmc_task.wsize)
 
     # start sampling
-    x_train, x_test, fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, transfer=True, directory='loc_22')
+    x_train, x_test, fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, transfer=True, directory='loc_01')
 
     # display train and test accuracies
     mcmc_task.display_rmse()
 
     # Plot the accuracies and rmse
-    mcmc_task.plot_rmse('Wifi Loc Task 22')
+    mcmc_task.plot_rmse('Wifi Loc Task 01')
 
 
     fx_train = fx_train[int(burnin):]
@@ -471,7 +475,7 @@ if __name__ == '__main__':
     plt.plot(x_train, fx_train_mu[:, 0], 'b.', label="fx_mu_train")
     plt.plot(x_train, y_train[:, 0], 'c.', label="y_train")
     # plt.plot(x_train, fx_high_tr[:, 0], 'g.', label="fx_95_train")
-    plt.plot(x_train, fx_low_tr[:, 0], 'y.', label="fx_5_train")
+    # plt.plot(x_train, fx_low_tr[:, 0], 'y.', label="fx_5_train")
 
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
     leg.get_frame().set_alpha(0.5)
@@ -483,26 +487,26 @@ if __name__ == '__main__':
     plt.clf()
 
 
-    ax = plt.subplot(111)
-    plt.plot(x_train, fx_train_mu[:, 1], 'b.', label="fx_mu_train")
-    plt.plot(x_train, y_train[:, 1], 'c.', label="y_train")
-    # plt.plot(x_train, fx_high_tr[:, 1], 'g.', label="fx_95_train")
-    plt.plot(x_train, fx_low_tr[:, 1], 'y.', label="fx_5_train")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('Latitude')
-    plt.title('Latitude plot')
-    plt.savefig(mcmc_task.directory+'/results/fx-latitude-train-mcmc.png')
-    plt.clf()
+    # ax = plt.subplot(111)
+    # plt.plot(x_train, fx_train_mu[:, 1], 'b.', label="fx_mu_train")
+    # plt.plot(x_train, y_train[:, 1], 'c.', label="y_train")
+    # # plt.plot(x_train, fx_high_tr[:, 1], 'g.', label="fx_95_train")
+    # # plt.plot(x_train, fx_low_tr[:, 1], 'y.', label="fx_5_train")
+    #
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Samples')
+    # plt.ylabel('Latitude')
+    # plt.title('Latitude plot')
+    # plt.savefig(mcmc_task.directory+'/results/fx-latitude-train-mcmc.png')
+    # plt.clf()
 
     ax = plt.subplot(111)
     plt.plot(x_test, fx_test_mu[:, 0], 'b.', label="fx_mu_test")
     plt.plot(x_test, y_test[:, 0], 'c.', label="y_test")
     # plt.plot(x_test, fx_high[:, 0], 'g.', label="fx_95_test")
-    plt.plot(x_test, fx_low[:, 0], 'y.', label="fx_5_test")
+    # plt.plot(x_test, fx_low[:, 0], 'y.', label="fx_5_test")
 
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
     leg.get_frame().set_alpha(0.5)
@@ -513,19 +517,19 @@ if __name__ == '__main__':
     plt.savefig(mcmc_task.directory+'/results/fx-longitude-test-mcmc.png')
     plt.clf()
 
-
-    ax = plt.subplot(111)
-    plt.plot(x_test, fx_test_mu[:, 1], 'b.', label="fx_mu_test")
-    plt.plot(x_test, y_test[:, 1], 'c.', label="y_test")
-    # plt.plot(x_test, fx_high[:, 1], 'g.', label="fx_95_test")
-    plt.plot(x_test, fx_low[:, 1], 'y.', label="fx_5_test")
-
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('Latitude')
-    plt.title('Latitude plot')
-    plt.savefig(mcmc_task.directory+'/results/fx-latitude-test-mcmc.png')
-    plt.clf()
+    #
+    # ax = plt.subplot(111)
+    # plt.plot(x_test, fx_test_mu[:, 1], 'b.', label="fx_mu_test")
+    # plt.plot(x_test, y_test[:, 1], 'c.', label="y_test")
+    # # plt.plot(x_test, fx_high[:, 1], 'g.', label="fx_95_test")
+    # # plt.plot(x_test, fx_low[:, 1], 'y.', label="fx_5_test")
+    #
+    #
+    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    # leg.get_frame().set_alpha(0.5)
+    #
+    # plt.xlabel('Samples')
+    # plt.ylabel('Latitude')
+    # plt.title('Latitude plot')
+    # plt.savefig(mcmc_task.directory+'/results/fx-latitude-test-mcmc.png')
+    # plt.clf()

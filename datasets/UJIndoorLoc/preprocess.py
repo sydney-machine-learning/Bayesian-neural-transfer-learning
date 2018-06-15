@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.preprocessing import normalize
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 
 trainfile = 'trainingData.csv'
 validationfile = 'validationData.csv'
@@ -19,12 +20,17 @@ print data.shape
 
 data = data[:, :-5]
 
-sc = StandardScaler()
-y = sc.fit_transform(data[:, :-2])
-data[:, :-2] = normalize(y, norm='l2')
+min_max_scaler = MinMaxScaler()
+data_scl = min_max_scaler.fit_transform(data[:, :-2])
+data[:, :-2] = normalize(data_scl, norm='l1')
 
-traindata = data[:trainsize, :]
-validationdata = data[trainsize:, :]
+x = data[:, :520]
+y = data[:, 520:-2]
+
+X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.30, random_state = 0)
+
+traindata = np.c_[X_train, y_train]
+validationdata = np.c_[X_test, y_test]
 
 print traindata.shape, validationdata.shape
 
