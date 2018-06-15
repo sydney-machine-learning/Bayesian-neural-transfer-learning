@@ -440,7 +440,7 @@ class MCMC:
 def main():
 
     input = 11
-    hidden = 50
+    hidden = 94
     output = 10
 
 
@@ -461,16 +461,112 @@ def main():
 
     mcmc = MCMC(numSamples, traindata, testdata, topology)  # declare class
 
-    # generate random weights
-    w_random = np.random.randn(mcmc.wsize)
+    # # generate random weights
+    # w_random = np.random.randn(mcmc.wsize)
+    #
+    # # start sampling
+    # mcmc.sampler(w_random, w_limit=0.05, transfer=True)
+    # mcmc.get_acc()
+    # mcmc.plot_acc('winewhite-langevin')
+    #
+    # burnin = 0.1 * numSamples  # use post burn in samples
+
+
+    c = 1.3
+
+    #------------------------------- Transfer weights from trained network to Target Task ---------------------------------
+    w_transfer = mcmc.transfer(c)
+
+    # Train for the target task with transfer
+    traindata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+    testdata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+
+    random.seed(time.time())
+    numSamples = 200  # need to decide yourself
+
+    # Create mcmc object for the target task
+    mcmc_red_trf = MCMC(numSamples, traindata, testdata, topology)
 
     # start sampling
-    mcmc.sampler(w_random, w_limit=0.05, transfer=True)
-    mcmc.get_acc()
-    mcmc.plot_acc('winewhite-langevin')
+    mcmc_red_trf.sampler(w_transfer, w_limit=0.05, transfer=False)
 
-    burnin = 0.1 * numSamples  # use post burn in samples
+    # display train and test accuracies
+    mcmc_red_trf.display_acc()
 
+    # Plot the accuracies and rmse
+    # mcmc.plot_acc('Wine-Quality-red')
+
+    #------------------------------------------- Target Task Without Transfer-------------------------------------------
+
+    random.seed(time.time())
+
+    # Create mcmc object for the target red
+    mcmc_red = MCMC(numSamples, traindata, testdata, topology)
+
+    # generate random weights
+    w_random = np.random.randn(mcmc_red.wsize)
+
+    # start sampling
+    mcmc_red.sampler(w_random, w_limit=0.05, transfer=False)
+
+    # display train and test accuracies
+    mcmc_red.display_acc()
+
+    # ----------------------------------------- Plot results of Transfer -----------------------------------------------
+
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.train_acc)), mcmc_red.train_acc, color='#FA7949', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.train_acc)), mcmc_red_trf.train_acc, color='#1A73B4', label="transfer")
+
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('Accuracy')
+    plt.title('Wine Quality red Train Accuracy plot')
+    plt.savefig('./results/accuracy-train-mcmc.png')
+
+    plt.clf()
+
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.test_acc)), mcmc_red.test_acc, color='#FA7949', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.test_acc)), mcmc_red_trf.test_acc, color='#1A73B4', label="transfer")
+
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('Accuracy')
+    plt.title('Wine Quality red Test Accuracy plot')
+    plt.savefig('./results/accuracy-test-mcmc.png')
+
+    plt.clf()
+
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.rmse_train)), mcmc_red.rmse_train, 'b', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.rmse_train)), mcmc_red_trf.rmse_train, 'c', label="transfer")
+
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('RMSE')
+    plt.title('Wine Quality red Train RMSE plot')
+    plt.savefig('./results/rmse-train-mcmc.png')
+    plt.clf()
+
+    ax = plt.subplot(111)
+    plt.plot(range(len(mcmc_red.rmse_test)), mcmc_red.rmse_test, 'b', label="no-transfer")
+    plt.plot(range(len(mcmc_red_trf.rmse_test)), mcmc_red_trf.rmse_test, 'c', label="transfer")
+
+    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+    leg.get_frame().set_alpha(0.5)
+
+    plt.xlabel('Samples')
+    plt.ylabel('RMSE')
+    plt.title('Wine Quality red Test RMSE plot')
+    plt.savefig('./results/rmse-test-mcmc.png')
+    plt.clf()
 
 
 if __name__ == "__main__": main()
