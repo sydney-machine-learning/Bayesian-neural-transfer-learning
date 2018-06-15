@@ -483,10 +483,10 @@ if __name__ == '__main__':
 
 
     ax = plt.subplot(111)
-    plt.plot(x_train[:100], fx_train_mu[:, 0, ], 'b', label="fx_mu_train")
-    plt.plot(x_train[:100], y_train[:, 0, ], 'c', label="y_train")
-    plt.plot(x_train[:100], fx_high_tr[:, 0,], 'g', label="fx_95_train")
-    plt.plot(x_train[:100], fx_low_tr[:, 0,], 'y', label="fx_5_train")
+    plt.plot(x_train, fx_train_mu[:, 0], 'b', label="fx_mu_train")
+    plt.plot(x_train, y_train[:, 0], 'c', label="y_train")
+    plt.plot(x_train, fx_high_tr[:, 0], 'g', label="fx_95_train")
+    plt.plot(x_train, fx_low_tr[:, 0], 'y', label="fx_5_train")
 
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
     leg.get_frame().set_alpha(0.5)
