@@ -148,12 +148,13 @@ class Network:
 
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
 class MCMC:
-    def __init__(self, samples, traindata, testdata, topology):
+    def __init__(self, samples, traindata, testdata, targetdata, topology):
         self.samples = samples  # NN topology [input, hidden, output]
         self.topology = topology  # max epocs
         self.traindata = traindata  #
         self.testdata = testdata
         self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
+        self.targetdata = targetdata
         # ----------------
 
     def rmse(self, predictions, targets):
@@ -206,11 +207,10 @@ class MCMC:
         if not os.path.isdir(self.directory):
             os.mkdir(self.directory)
 
-        # trainfxfile = open(self.directory+'/fx_train.csv', 'w')
-        # testfxfile = open(self.directory+'/fx_test.csv', 'w')
-
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
+        targetrmsefile = open(self.directory+'/targetrmse.csv', 'w')
+
 
 
         # ------------------- initialize MCMC
@@ -218,12 +218,12 @@ class MCMC:
         start = time.time()
         testsize = self.testdata.shape[0]
         trainsize = self.traindata.shape[0]
+        targetsize = self.targetdata.shape[0]
         samples = self.samples
 
         x_test = np.linspace(0, 1, num=testsize)
         x_train = np.linspace(0, 1, num=trainsize)
-
-
+        x_target = np.linspace(0, 1, num=targetsize)
 
         netw = self.topology  # [input, hidden, output]
         y_test = self.testdata[:, netw[0]:]
@@ -234,6 +234,7 @@ class MCMC:
 
         fxtrain_samples = np.ones((samples, trainsize, netw[2]))  # fx of train data over all samples
         fxtest_samples = np.ones((samples, testsize, netw[2]))  # fx of test data over all samples
+        fxtarget_samples = np.ones((samples, targetsize, netw[2])) #fx of target data over all samples
 
         w = w_pretrain
 
@@ -248,6 +249,7 @@ class MCMC:
 
         pred_train = neuralnet.evaluate_proposal(self.traindata, w)
         pred_test = neuralnet.evaluate_proposal(self.testdata, w)
+        pred_target = neuralnet.evaluate_proposal(self.targetdata, w)
 
 
 
@@ -262,24 +264,21 @@ class MCMC:
 
         [likelihood, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w, tau_pro)
         [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w, tau_pro)
+        [likelihood_ignore, pred_target, rmsetarget] = self.likelihood_func(neuralnet, self.targetdata, w, tau_pro)
 
 
 
-
+        # save the information
         if transfer:
             np.reshape(w_proposal, (1, w_proposal.shape[0]))
             with open(self.directory+'/wprop.csv', 'w') as wprofile:
                 np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
-        # print pred_train.shape
-        # np.savetxt(trainfxfile, pred_train)
-        # np.savetxt(testfxfile, pred_test)
         np.savetxt(trainrmsefile, [rmsetrain])
         np.savetxt(testrmsefile, [rmsetest])
+        np.savetxt(targetrmsefile, [rmsetarget])
 
-
-        trainfx_prev = pred_train
-        testfx_prev = pred_test
+        rmsetarget_prev = rmsetarget
         rmsetest_prev = rmsetest
         rmsetrain_prev = rmsetrain
         wpro_prev = w_proposal
@@ -297,7 +296,7 @@ class MCMC:
 
             [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w_proposal, tau_pro)
             [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w_proposal, tau_pro)
-
+            [likelihood_ignore, pred_trget, rmsetarget] = self.likelihood_func(neuralnet, self.targetdata, w_proposal, tau_pro)
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
 
@@ -339,13 +338,16 @@ class MCMC:
                 # print(pred_train[0], y_train[0])
                 fxtrain_samples[i + 1, :, :] = pred_train[:,  :]
                 fxtest_samples[i + 1, :, :] = pred_test[:, :]
+                fxtarget_samples[i + 1, :, :] = pred_target[:, :]
                 np.savetxt(trainrmsefile, [rmsetrain])
                 np.savetxt(testrmsefile, [rmsetest])
+                np.savetxt(targetrmsefile, [rmsetarget])
 
                 #save values into previous variables
                 wpro_prev = w_proposal
                 rmsetrain_prev = rmsetrain
                 rmsetest_prev = rmsetest
+                rmsetarget_prev = rmsetarget
 
             else:
                 if transfer:
@@ -354,25 +356,26 @@ class MCMC:
                         np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
                 fxtrain_samples[i + 1,:, :] = fxtrain_samples[i, :, :]
                 fxtest_samples[i + 1,:, :] = fxtest_samples[i, :, :]
+                fxtarget_samples[i + 1, :, :] = fxtarget_samples[i, :, :]
                 np.savetxt(trainrmsefile, [rmsetrain_prev])
                 np.savetxt(testrmsefile, [rmsetest_prev])
+                np.savetxt(targetrmsefile, [rmsetarget_prev])
+
 
         print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
 
         # Close the files
-        # trainfxfile.close()
-        # testfxfile.close()
         trainrmsefile.close()
         testrmsefile.close()
+        targetrmsefile.close()
 
         return (x_train, x_test, fxtrain_samples, fxtest_samples, accept_ratio)
 
     def get_fx_rmse(self):
-        # self.fx_train = np.genfromtxt(self.directory+'/fx_train.csv')
-        # self.fx_test = np.genfromtxt(self.directory+'/fx_test.csv')
         self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
         self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
+        self.rmse_target = np.genfromtxt(self.directory+'/targetrmse.csv')
 
     def display_rmse(self):
         burnin = 0.1 * self.samples  # use post burn in samples
@@ -383,10 +386,15 @@ class MCMC:
         rmse_tes = np.mean(self.rmse_test[int(burnin):])
         rmsetest_std = np.std(self.rmse_test[int(burnin):])
 
+        rmse_target = np.mean(self.rmse_target[int(burnin):])
+        rmsetarget_std = np.std(self.rmse_target[int(burnin):])
+
         print "Train rmse:"
-        print "Mean: " + str(rmse_tr) + " Std: " + str(rmse_tr)
+        print "Mean: " + str(rmse_tr) + " Std: " + str(rmsetr_std)
         print "\nTest rmse:"
-        print "Mean: " + str(rmse_tes) + " Std: " + str(rmse_tes)
+        print "Mean: " + str(rmse_tes) + " Std: " + str(rmsetest_std)
+        print "\nTarget rmse:"
+        print "Mean: " + str(rmse_target) + " Std: " + str(rmsetarget_std)
 
     def plot_rmse(self, dataset):
         if not os.path.isdir(self.directory+'/results'):
@@ -395,6 +403,8 @@ class MCMC:
         ax = plt.subplot(111)
         plt.plot(range(len(self.rmse_train)), self.rmse_train, 'b.', label="train-rmse")
         plt.plot(range(len(self.rmse_test)), self.rmse_test, 'c.', label="test-rmse")
+        plt.plot(range(len(self.rmse_target)), self.rmse_target, 'm.', label="target-rmse")
+
 
         leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
         leg.get_frame().set_alpha(0.5)
@@ -428,14 +438,15 @@ if __name__ == '__main__':
 
     traindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/23.csv', delimiter=',')
     testdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/23.csv', delimiter=',')
-
-    print traindata.shape, testdata.shape
+    targetdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/20.csv', delimiter=',')
 
     traindata = traindata[:, :-2]
     testdata = testdata[:, :-2]
+    targetdata = targetdata[:, :-2]
 
     y_train = traindata[:, input:]
     y_test = testdata[:, input:]
+    y_target = targetdata[:, input:]
 
 
     random.seed(time.time())
@@ -443,7 +454,7 @@ if __name__ == '__main__':
     numSamples = 2000# need to decide yourself
     burnin = 0.1 * numSamples
 
-    mcmc_task = MCMC(numSamples, traindata, testdata, topology)  # declare class
+    mcmc_task = MCMC(numSamples, traindata, testdata, targetdata, topology)  # declare class
 
     # generate random weights
     w_random = np.random.randn(mcmc_task.wsize)

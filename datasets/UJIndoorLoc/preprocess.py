@@ -22,10 +22,12 @@ data = data[:, :-5]
 
 min_max_scaler = MinMaxScaler()
 data_scl = min_max_scaler.fit_transform(data[:, :-2])
-data[:, :-2] = normalize(data_scl, norm='l1')
+data[:, :-2] = normalize(data_scl, norm='l2')
+
+
 
 x = data[:, :520]
-y = data[:, 520:-2]
+y = data[:, 520:]
 
 X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.30, random_state = 0)
 
