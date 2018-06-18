@@ -206,9 +206,6 @@ class MCMC:
         if not os.path.isdir(self.directory):
             os.mkdir(self.directory)
 
-        # trainfxfile = open(self.directory+'/fx_train.csv', 'w')
-        # testfxfile = open(self.directory+'/fx_test.csv', 'w')
-
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
 
@@ -272,8 +269,6 @@ class MCMC:
                 np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
         # print pred_train.shape
-        # np.savetxt(trainfxfile, pred_train)
-        # np.savetxt(testfxfile, pred_test)
         np.savetxt(trainrmsefile, [rmsetrain])
         np.savetxt(testrmsefile, [rmsetest])
 
@@ -361,16 +356,12 @@ class MCMC:
         accept_ratio = naccept / (samples * 1.0) * 100
 
         # Close the files
-        # trainfxfile.close()
-        # testfxfile.close()
         trainrmsefile.close()
         testrmsefile.close()
 
         return (x_train, x_test, fxtrain_samples, fxtest_samples, accept_ratio)
 
     def get_fx_rmse(self):
-        # self.fx_train = np.genfromtxt(self.directory+'/fx_train.csv')
-        # self.fx_test = np.genfromtxt(self.directory+'/fx_test.csv')
         self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
         self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
 
@@ -472,10 +463,10 @@ if __name__ == '__main__':
 
 
     ax = plt.subplot(111)
-    plt.plot(x_train[:100], fx_train_mu[:, 0, ], 'b', label="fx_mu_train")
-    plt.plot(x_train[:100], y_train[:, 0, ], 'c', label="y_train")
-    plt.plot(x_train[:100], fx_high_tr[:, 0,], 'g', label="fx_95_train")
-    plt.plot(x_train[:100], fx_low_tr[:, 0,], 'y', label="fx_5_train")
+    plt.plot(x_train, fx_train_mu[:, 0], 'b.', label="fx_mu_train")
+    plt.plot(x_train, y_train[:, 0], 'c.', label="y_train")
+    plt.plot(x_train, fx_high_tr[:, 0], 'g.', label="fx_95_train")
+    plt.plot(x_train, fx_low_tr[:, 0], 'y.', label="fx_5_train")
 
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
     leg.get_frame().set_alpha(0.5)
@@ -488,10 +479,10 @@ if __name__ == '__main__':
 
 
     ax = plt.subplot(111)
-    plt.plot(x_train, fx_train_mu[:, 1], 'b', label="fx_mu_train")
-    plt.plot(x_train, y_train[:, 1], 'c', label="y_train")
-    plt.plot(x_train, fx_high_tr[:, 1], 'g', label="fx_95_train")
-    plt.plot(x_train, fx_low_tr[:, 1], 'y', label="fx_5_train")
+    plt.plot(x_train, fx_train_mu[:, 1], 'b.', label="fx_mu_train")
+    plt.plot(x_train, y_train[:, 1], 'c.', label="y_train")
+    plt.plot(x_train, fx_high_tr[:, 1], 'g.', label="fx_95_train")
+    plt.plot(x_train, fx_low_tr[:, 1], 'y.', label="fx_5_train")
 
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
     leg.get_frame().set_alpha(0.5)
@@ -503,10 +494,10 @@ if __name__ == '__main__':
     plt.clf()
 
     ax = plt.subplot(111)
-    plt.plot(x_test, fx_test_mu[:, 0], 'b', label="fx_mu_test")
-    plt.plot(x_test, y_test[:, 0], 'c', label="y_test")
-    plt.plot(x_test, fx_high[:, 0], 'g', label="fx_95_test")
-    plt.plot(x_test, fx_low[:, 0], 'y', label="fx_5_test")
+    plt.plot(x_test, fx_test_mu[:, 0], 'b.', label="fx_mu_test")
+    plt.plot(x_test, y_test[:, 0], 'c.', label="y_test")
+    plt.plot(x_test, fx_high[:, 0], 'g.', label="fx_95_test")
+    plt.plot(x_test, fx_low[:, 0], 'y.', label="fx_5_test")
 
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
     leg.get_frame().set_alpha(0.5)
@@ -519,10 +510,10 @@ if __name__ == '__main__':
 
 
     ax = plt.subplot(111)
-    plt.plot(x_test, fx_test_mu[:, 1], 'b', label="fx_mu_test")
-    plt.plot(x_test, y_test[:, 1], 'c', label="y_test")
-    plt.plot(x_test, fx_high[:, 1], 'g', label="fx_95_test")
-    plt.plot(x_test, fx_low[:, 1], 'y', label="fx_5_test")
+    plt.plot(x_test, fx_test_mu[:, 1], 'b.', label="fx_mu_test")
+    plt.plot(x_test, y_test[:, 1], 'c.', label="y_test")
+    plt.plot(x_test, fx_high[:, 1], 'g.', label="fx_95_test")
+    plt.plot(x_test, fx_low[:, 1], 'y.', label="fx_5_test")
 
 
     leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)

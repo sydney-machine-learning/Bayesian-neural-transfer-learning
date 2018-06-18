@@ -1,7 +1,29 @@
 import numpy as np
-from sklearn.preprocessing import normalize
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
+# from sklearn.preprocessing import normalize
+# from sklearn.preprocessing import MinMaxScaler
+# from sklearn.model_selection import train_test_split
+
+
+def normalizedata(data):
+    a = 0
+    b = 1
+
+    longmax = -7299.786516730871000
+    longmin = -7695.9387549299299000
+    latmin = 4864745.7450159714
+    latmax = 4865017.3646842018
+
+    long = data[:, 520]
+    lat = data[:, 521]
+
+    long = np.ones(long.shape)*a + (long - np.ones(long.shape)*longmin)*(b - a)/(longmax - longmin)
+    lat = a + (lat - latmin)*(b - a)/(latmax - latmin)
+
+    data[:, 520] = long
+    data[:, 521] = lat
+
+    return data
+
 
 trainfile = 'trainingData.csv'
 validationfile = 'validationData.csv'
@@ -20,19 +42,10 @@ print data.shape
 
 data = data[:, :-5]
 
-min_max_scaler = MinMaxScaler()
-data_scl = min_max_scaler.fit_transform(data[:, :-2])
-data[:, :-2] = normalize(data_scl, norm='l2')
+data = normalizedata(data)
 
-
-
-x = data[:, :520]
-y = data[:, 520:]
-
-X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.30, random_state = 0)
-
-traindata = np.c_[X_train, y_train]
-validationdata = np.c_[X_test, y_test]
+traindata = data[:trainsize, :]
+validationdata = data[trainsize:, :]
 
 print traindata.shape, validationdata.shape
 
@@ -62,3 +75,5 @@ for file, data in datadict.items():
     for building_id, dict in building.items():
         for floor_id, data in building[building_id].items():
             np.savetxt(file+'/'+''.join([str(building_id),str(floor_id)])+'.csv', data, delimiter=',')
+            # if file == 'trainingData':
+            print file, building_id, floor_id, data.shape
