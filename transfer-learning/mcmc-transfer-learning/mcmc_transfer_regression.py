@@ -29,6 +29,7 @@ def convert_time(secs):
 
     return [mins, secs]
 
+
 # --------------------------------------------- Basic Neural Network Class ---------------------------------------------
 
 class Network:
@@ -327,7 +328,7 @@ class MCMC:
                     + " Train RMSE: "+ str(rmsetrain)
                     + " Test RMSE: " + str(rmsetest)
                     + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
-                print ""
+#                print ""
 
                 # save arrays to file
                 if transfer:
@@ -391,10 +392,11 @@ class MCMC:
 
         print "Train rmse:"
         print "Mean: " + str(rmse_tr) + " Std: " + str(rmsetr_std)
-        print "\nTest rmse:"
+        print "Test rmse:"
         print "Mean: " + str(rmse_tes) + " Std: " + str(rmsetest_std)
-        print "\nTarget rmse:"
+        print "Target rmse:"
         print "Mean: " + str(rmse_target) + " Std: " + str(rmsetarget_std)
+        print "\n"
 
     def plot_rmse(self, dataset):
         if not os.path.isdir(self.directory+'/results'):
@@ -432,11 +434,11 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    for building_id in [0,1,2]:
-        for floor in [1,2,3]:
+    for building_id in [0, 1, 2]:
+        for floor in [0, 2, 3]:
             traindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/'+str(building_id)+str(floor)+'.csv', delimiter=',')
             testdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/'+str(building_id)+str(floor)+'.csv', delimiter=',')
-            targetdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/00.csv', delimiter=',')
+            targetdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/11.csv', delimiter=',')
 
             traindata = traindata[:, :-2]
             testdata = testdata[:, :-2]
