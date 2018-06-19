@@ -149,14 +149,23 @@ class Network:
 
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
 class MCMC:
-    def __init__(self, samples, traindata, testdata, targetdata, topology):
+    def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology):
         self.samples = samples  # NN topology [input, hidden, output]
         self.topology = topology  # max epocs
         self.traindata = traindata  #
         self.testdata = testdata
+        self.targettraindata = targettraindata
+        self.targettestdata = targettestdata
+        self.numSources = sources
         self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
-        self.targetdata = targetdata
+        self.createNetworks()
         # ----------------
+
+    def createNetworks(self):
+        self.sources = []
+        for index in xrange(self.numSources):
+            self.sources.append(Network(self.topology, self.traindata[index], self.testdata[index]))
+        self.target = Network(self.topology, self.targettraindata, self.targettestdata)
 
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
@@ -201,177 +210,225 @@ class MCMC:
         return self.genweights(w_mean, w_std)
 
 
-    def sampler(self, w_pretrain, directory, transfer=False):
+    def sampler(self, w_pretrain, directory, save_knowledge=False):
 
         # Create file objects to write the attributes of the samples
         self.directory = directory
         if not os.path.isdir(self.directory):
             os.mkdir(self.directory)
 
-        trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
-        testrmsefile = open(self.directory+'/testrmse.csv', 'w')
-        targetrmsefile = open(self.directory+'/targetrmse.csv', 'w')
+        # trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
+        # testrmsefile = open(self.directory+'/testrmse.csv', 'w')
+        # targetrmsefile = open(self.directory+'/targetrmse.csv', 'w')
 
 
 
         # ------------------- initialize MCMC
 
         start = time.time()
-        testsize = self.testdata.shape[0]
-        trainsize = self.traindata.shape[0]
-        targetsize = self.targetdata.shape[0]
+        trainsize = np.zeros((self.numSources))
+        testsize = np.zeros((self.numSources))
+        for index in xrange(self.numSources):
+            trainsize[index] = self.traindata[index].shape[0]
+            testsize[index] = self.testdata[index].shape[0]
+
+        targettrainsize = self.targettraindata.shape[0]
+        targettestsize = self.targettestdata.shape[0]
+
         samples = self.samples
 
-        x_test = np.linspace(0, 1, num=testsize)
-        x_train = np.linspace(0, 1, num=trainsize)
-        x_target = np.linspace(0, 1, num=targetsize)
+        # x_test = np.linspace(0, 1, num=testsize)
+        # x_train = np.linspace(0, 1, num=trainsize)
+        # x_target = np.linspace(0, 1, num=targetsize)
 
+        y_train = []
+        y_test = []
         netw = self.topology  # [input, hidden, output]
-        y_test = self.testdata[:, netw[0]:]
-        y_train = self.traindata[:, netw[0]:]
+        for index in xrange(self.numSources):
+            y_test.append(self.testdata[index][:, netw[0]:])
+            y_train.append(self.traindata[index][:, netw[0]:])
+
+        y_test_target = self.targettestdata[:, netw[0]:]
+        y_train_target = self.targettraindata[:, netw[0]:]
 
 
         pos_w = np.ones((self.wsize, ))  # posterior of all weights and bias over all samples
 
-        fxtrain_samples = np.ones((samples, trainsize, netw[2]))  # fx of train data over all samples
-        fxtest_samples = np.ones((samples, testsize, netw[2]))  # fx of test data over all samples
-        fxtarget_samples = np.ones((samples, targetsize, netw[2])) #fx of target data over all samples
+        fxtrain_samples = []
+        fxtest_samples = []
+        for index in xrange(self.numSources):
+            fxtrain_samples.append(np.ones((int(samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
+            fxtest_samples.append(np.ones((int(samples), int(testsize[index]), netw[2])))  # fx of test data over all samples
 
-        w = w_pretrain
+        fxtarget_train_samples = np.ones((samples, targettrainsize, netw[2])) #fx of target train data over all samples
+        fxtarget_test_samples = np.ones((samples, targettestsize, netw[2])) #fx of target test data over all samples
 
-        w_proposal = w_pretrain
+        w = np.zeros((self.numSources, self.wsize))
+        w_proposal = np.zeros((self.numSources, self.wsize))
+        for index in xrange(self.numSources):
+            w[index] = w_pretrain
+            w_proposal[index] = w_pretrain
+
+        w_target = w_pretrain
+        w_target_pro = w_pretrain
 
         step_w = 0.02  # defines how much variation you need in changes to w
-        step_eta = 0.01;
-
-        # --------------------- Declare FNN and initialize
-
-        neuralnet = Network(self.topology, self.traindata, self.testdata)
-
-        pred_train = neuralnet.evaluate_proposal(self.traindata, w)
-        pred_test = neuralnet.evaluate_proposal(self.testdata, w)
-        pred_target = neuralnet.evaluate_proposal(self.targetdata, w)
-
-
-
-        eta = np.log(np.var(pred_train - y_train))
-        tau_pro = np.exp(eta)
-
+        step_eta = 0.01
         sigma_squared = 25
         nu_1 = 0
         nu_2 = 0
 
-        prior = self.log_prior(sigma_squared, nu_1, nu_2, w, tau_pro)  # takes care of the gradients
+        # -------------------------------------initialize-------------------------
+        pred_train = []
+        pred_test = []
+        eta = np.zeros((self.numSources))
+        tau_pro = np.zeros((self.numSources))
 
-        [likelihood, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w, tau_pro)
-        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w, tau_pro)
-        [likelihood_ignore, pred_target, rmsetarget] = self.likelihood_func(neuralnet, self.targetdata, w, tau_pro)
+        for index in xrange(self.numSources):
+            pred_train.append(self.sources[index].evaluate_proposal(self.traindata[index], w[index]))
+            pred_test.append(self.sources[index].evaluate_proposal(self.testdata[index], w[index]))
+            eta[index] = np.log(np.var(pred_train[index] - y_train[index]))
+            tau_pro[index] = np.exp(eta[index])
+
+
+        pred_train_target = self.target.evaluate_proposal(self.targettraindata, w_target)
+        pred_test_target = self.target.evaluate_proposal(self.targettestdata, w_target)
+
+        eta_target = np.log(np.var(pred_train_target - y_train_target))
+        tau_pro_target = np.exp(eta_target)
+
+        prior = np.zeros((self.numSources))
+        likelihood = np.zeros((self.numSources))
+        likelihood_proposal = np.zeros((self.numSources))
+
+        rmsetrain = np.zeros((self.numSources))
+        rmsetest = np.zeros((self.numSources))
+
+        for index in xrange(self.numSources):
+            prior[index] = self.log_prior(sigma_squared, nu_1, nu_2, w[index], tau_pro[index])  # takes care of the gradients
+            [likelihood[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index], tau_pro[index])
+            [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w[index], tau_pro[index])
+
+        [likelihood_target, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target, tau_pro_target)
+        [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target, tau_pro_target)
 
 
 
         # save the information
-        if transfer:
-            np.reshape(w_proposal, (1, w_proposal.shape[0]))
-            with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
-
-        np.savetxt(trainrmsefile, [rmsetrain])
-        np.savetxt(testrmsefile, [rmsetest])
-        np.savetxt(targetrmsefile, [rmsetarget])
-
-        rmsetarget_prev = rmsetarget
-        rmsetest_prev = rmsetest
-        rmsetrain_prev = rmsetrain
-        wpro_prev = w_proposal
+        # if save_knowledge:
+        #     np.reshape(w_proposal, (1, w_proposal.shape[0]))
+        #     with open(self.directory+'/wprop.csv', 'w') as wprofile:
+        #         np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+        #
+        # np.savetxt(trainrmsefile, [rmsetrain])
+        # np.savetxt(testrmsefile, [rmsetest])
+        # np.savetxt(targetrmsefile, [rmsetarget])
+        #
+        # rmsetarget_prev = rmsetarget
+        # rmsetest_prev = rmsetest
+        # rmsetrain_prev = rmsetrain
+        # wpro_prev = w_proposal
 
         naccept = 0
         # print 'begin sampling using mcmc random walk'
 
+        prior_prop = np.zeros((self.numSources))
+
         for i in range(samples - 1):
 
             w_proposal = w + np.random.normal(0, step_w, self.wsize)
+            w_target_pro = w_target + np.random.normal(0, step_w, self.wsize)
 
             eta_pro = eta + np.random.normal(0, step_eta, 1)
-            tau_pro = math.exp(eta_pro)
+            eta_pro_target = eta_target + np.random.normal(0, step_eta, 1)
 
+            print eta_pro
+            tau_pro = np.exp(eta_pro)
+            tau_pro_target = np.exp(eta_pro_target)
 
-            [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(neuralnet, self.traindata, w_proposal, tau_pro)
-            [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(neuralnet, self.testdata, w_proposal, tau_pro)
-            [likelihood_ignore, pred_trget, rmsetarget] = self.likelihood_func(neuralnet, self.targetdata, w_proposal, tau_pro)
+            for index in xrange(self.numSources):
+                [likelihood_proposal[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w_proposal[index], tau_pro[index])
+                [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w_proposal[index], tau_pro[index])
+
+            [likelihood_target_prop, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro, tau_pro_target)
+            [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target_pro, tau_pro_target)
+
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
+            for index in xrange(self.numSources):
+                prior_prop[index] = self.log_prior(sigma_squared, nu_1, nu_2 ,w_proposal[index], tau_pro[index])  # takes care of the gradients
 
-            prior_prop = self.log_prior(sigma_squared, nu_1, nu_2 ,w_proposal, tau_pro)  # takes care of the gradients
 
             diff_likelihood = likelihood_proposal - likelihood
             diff_prior = prior_prop - prior
+            diff = np.zeros(diff_prior.shape)
+            mh_prob = np.zeros(diff.shape)
 
-            diff = min(700, diff_likelihood + diff_prior)
-            # print(diff)
-
-            mh_prob = min(1, math.exp(diff))
+            for index in xrange(self.numSources):
+                diff[index] = min(700, diff_likelihood[index] + diff_prior[index])
+                mh_prob[index] = min(1, math.exp(diff[index]))
 
             u = random.uniform(0, 1)
 
-            if u < mh_prob:
-                # Update position
-                naccept += 1
-                likelihood = likelihood_proposal
-                prior = prior_prop
-                w = w_proposal
-                eta = eta_pro
+            for index in xrange(self.numSources):
+                if u < mh_prob[index]:
+                    # Update position
+                    naccept += 1
+                    likelihood[index] = likelihood_proposal[index]
+                    prior[index] = prior_prop[index]
+                    w[index] = w_proposal[index]
+                    eta[index] = eta_pro[index]
 
-                # print i, trainacc, rmsetrain
-                elapsed = convert_time(time.time() - start)
-                sys.stdout.write(
-                    '\rSamples: ' + str(i + 2) + "/" + str(samples)
-                    + " Train RMSE: "+ str(rmsetrain)
-                    + " Test RMSE: " + str(rmsetest)
-                    + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
-#                print ""
+                    # print i, trainacc, rmsetrain
+                    elapsed = convert_time(time.time() - start)
+                    sys.stdout.write(
+                        '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                        + " Train RMSE: "+ str(rmsetrain)
+                        + " Test RMSE: " + str(rmsetest)
+                        + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
+    #                print ""
 
-                # save arrays to file
-                if transfer:
-                    np.reshape(w_proposal, (1, w_proposal.shape[0]))
-                    with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                        np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+                    # save arrays to file
+                    # if save_knowledge:
+                    #     np.reshape(w_proposal, (1, w_proposal.shape[0]))
+                    #     with open(self.directory+'/wprop.csv', 'w') as wprofile:
+                    #             np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
 
-                # print(pred_train[0], y_train[0])
-                fxtrain_samples[i + 1, :, :] = pred_train[:,  :]
-                fxtest_samples[i + 1, :, :] = pred_test[:, :]
-                fxtarget_samples[i + 1, :, :] = pred_target[:, :]
-                np.savetxt(trainrmsefile, [rmsetrain])
-                np.savetxt(testrmsefile, [rmsetest])
-                np.savetxt(targetrmsefile, [rmsetarget])
+                    # print(pred_train[0], y_train[0])
+                    fxtrain_samples[index][i + 1, :, :] = pred_train[index][:,  :]
+                    fxtest_samples[index][i + 1, :, :] = pred_test[index][:, :]
 
-                #save values into previous variables
-                wpro_prev = w_proposal
-                rmsetrain_prev = rmsetrain
-                rmsetest_prev = rmsetest
-                rmsetarget_prev = rmsetarget
+                    # np.savetxt(trainrmsefile, [rmsetrain])
+                    # np.savetxt(testrmsefile, [rmsetest])
+                    # np.savetxt(targetrmsefile, [rmsetarget])
 
-            else:
-                if transfer:
-                    np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
-                    with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                        np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
-                fxtrain_samples[i + 1,:, :] = fxtrain_samples[i, :, :]
-                fxtest_samples[i + 1,:, :] = fxtest_samples[i, :, :]
-                fxtarget_samples[i + 1, :, :] = fxtarget_samples[i, :, :]
-                np.savetxt(trainrmsefile, [rmsetrain_prev])
-                np.savetxt(testrmsefile, [rmsetest_prev])
-                np.savetxt(targetrmsefile, [rmsetarget_prev])
+                    #save values into previous variables
+                    # wpro_prev = w_proposal
+                    # rmsetrain_prev = rmsetrain
+                    # rmsetest_prev = rmsetest
+                    # rmsetarget_prev = rmsetarget
+
+                else:
+                    # if save_knowledge:
+                    #     np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
+                    #     with open(self.directory+'/wprop.csv', 'w') as wprofile:
+                    #         np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
+                    fxtrain_samples[index][i + 1, :, :] = fxtrain_samples[index][i, :, :]
+                    fxtest_samples[index][i + 1, :, :] = fxtest_samples[index][i, :, :]
+                    # np.savetxt(trainrmsefile, [rmsetrain_prev])
+                    # np.savetxt(testrmsefile, [rmsetest_prev])
+                    # np.savetxt(targetrmsefile, [rmsetarget_prev])
 
 
         print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
 
         # Close the files
-        trainrmsefile.close()
-        testrmsefile.close()
-        targetrmsefile.close()
+        # trainrmsefile.close()
+        # testrmsefile.close()
+        # targetrmsefile.close()
 
-        return (x_train, x_test, fxtrain_samples, fxtest_samples, accept_ratio)
+        return (fxtrain_samples, fxtest_samples, accept_ratio)
 
     def get_fx_rmse(self):
         self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
@@ -434,113 +491,41 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    for building_id in [0, 1, 2]:
-        for floor in [0, 2, 3]:
-            traindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/'+str(building_id)+str(floor)+'.csv', delimiter=',')
-            testdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/'+str(building_id)+str(floor)+'.csv', delimiter=',')
-            targetdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/11.csv', delimiter=',')
+    numSources = 3
+    building_id = [1]
+    floor_id  = [0, 1, 2]
+    traindata = []
+    testdata = []
 
-            traindata = traindata[:, :-2]
-            testdata = testdata[:, :-2]
-            targetdata = targetdata[:, :-2]
+    for index in xrange(numSources):
+        traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/'+str(building_id[0])+str(floor_id[index])+'.csv',
+                            delimiter=',')[:, :-2])
+        testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/validationData/'+str(building_id[0])+str(floor_id[index])+'.csv',
+                            delimiter=',')[:, :-2])
 
-            y_train = traindata[:, input:]
-            y_test = testdata[:, input:]
-            y_target = targetdata[:, input:]
-
-
-            random.seed(time.time())
-
-            numSamples = 2000# need to decide yourself
-            burnin = 0.1 * numSamples
-
-            mcmc_task = MCMC(numSamples, traindata, testdata, targetdata, topology)  # declare class
-
-            # generate random weights
-            w_random = np.random.randn(mcmc_task.wsize)
-
-            # start sampling
-            x_train, x_test, fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, transfer=True, directory='loc_'+str(building_id)+str(floor))
-
-            # display train and test accuracies
-            mcmc_task.display_rmse()
-
-            # Plot the accuracies and rmse
-            mcmc_task.plot_rmse('Wifi Loc Task '+str(building_id)+str(floor))
+    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/13.csv', delimiter=',')[:, :-2]
+    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/13.csv', delimiter=',')[:, :-2]
 
 
-    # fx_train = fx_train[int(burnin):]
-    # fx_test = fx_test[int(burnin):]
-    #
-    # fx_train_mu = fx_train.mean(axis=0)
-    # fx_test_mu = fx_test.mean(axis=0)
-    #
-    # fx_high_tr = np.percentile(fx_train, 95, axis=0)
-    # fx_low_tr = np.percentile(fx_train, 5, axis=0)
-    #
-    # fx_high = np.percentile(fx_test, 95, axis=0)
-    # fx_low = np.percentile(fx_test, 5, axis=0)
-    #
-    #
-    # ax = plt.subplot(111)
-    # plt.plot(x_train, fx_train_mu[:, 0], 'b', label="fx_mu_train")
-    # plt.plot(x_train, y_train[:, 0], 'c', label="y_train")
-    # plt.plot(x_train, fx_high_tr[:, 0], 'g', label="fx_95_train")
-    # plt.plot(x_train, fx_low_tr[:, 0], 'y', label="fx_5_train")
-    #
-    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    # leg.get_frame().set_alpha(0.5)
-    #
-    # plt.xlabel('Samples')
-    # plt.ylabel('Longitude')
-    # plt.title('Longitude plot')
-    # plt.savefig(mcmc_task.directory+'/results/fx-longitude-train-mcmc.png')
-    # plt.clf()
-    #
-    #
-    # ax = plt.subplot(111)
-    # plt.plot(x_train, fx_train_mu[:, 1], 'b', label="fx_mu_train")
-    # plt.plot(x_train, y_train[:, 1], 'c', label="y_train")
-    # plt.plot(x_train, fx_high_tr[:, 1], 'g', label="fx_95_train")
-    # plt.plot(x_train, fx_low_tr[:, 1], 'y', label="fx_5_train")
-    #
-    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    # leg.get_frame().set_alpha(0.5)
-    #
-    # plt.xlabel('Samples')
-    # plt.ylabel('Latitude')
-    # plt.title('Latitude plot')
-    # plt.savefig(mcmc_task.directory+'/results/fx-latitude-train-mcmc.png')
-    # plt.clf()
-    #
-    # ax = plt.subplot(111)
-    # plt.plot(x_test, fx_test_mu[:, 0], 'b', label="fx_mu_test")
-    # plt.plot(x_test, y_test[:, 0], 'c', label="y_test")
-    # plt.plot(x_test, fx_high[:, 0], 'g', label="fx_95_test")
-    # plt.plot(x_test, fx_low[:, 0], 'y', label="fx_5_test")
-    #
-    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    # leg.get_frame().set_alpha(0.5)
-    #
-    # plt.xlabel('Samples')
-    # plt.ylabel('Longitude')
-    # plt.title('Longitude plot')
-    # plt.savefig(mcmc_task.directory+'/results/fx-longitude-test-mcmc.png')
-    # plt.clf()
-    #
-    #
-    # ax = plt.subplot(111)
-    # plt.plot(x_test, fx_test_mu[:, 1], 'b', label="fx_mu_test")
-    # plt.plot(x_test, y_test[:, 1], 'c', label="y_test")
-    # plt.plot(x_test, fx_high[:, 1], 'g', label="fx_95_test")
-    # plt.plot(x_test, fx_low[:, 1], 'y', label="fx_5_test")
-    #
-    #
-    # leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    # leg.get_frame().set_alpha(0.5)
-    #
-    # plt.xlabel('Samples')
-    # plt.ylabel('Latitude')
-    # plt.title('Latitude plot')
-    # plt.savefig(mcmc_task.directory+'/results/fx-latitude-test-mcmc.png')
-    # plt.clf()
+    # y_train = traindata[:, input:]
+    # y_test = testdata[:, input:]
+    # y_target = targetdata[:, input:]
+
+    random.seed(time.time())
+
+    numSamples = 2000# need to decide yourself
+    burnin = 0.1 * numSamples
+
+    mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology)  # declare class
+
+    # generate random weights
+    w_random = np.random.randn(mcmc_task.wsize)
+
+    # start sampling
+    x_train, x_test, fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, directory='target13')
+
+    # display train and test accuracies
+    mcmc_task.display_rmse()
+
+    # Plot the accuracies and rmse
+    mcmc_task.plot_rmse('Wifi Loc Task '+str(building_id)+str(floor))
