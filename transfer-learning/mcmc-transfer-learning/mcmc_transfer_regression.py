@@ -193,19 +193,9 @@ class MCMC:
 
 
     def transfer(self, stdmulconst, w_transfer, trainsize):
-        # file = open(self.directory+'/wprop.csv', 'rb')
-        # lines = file.read().split('\n')[:-1]
-
-        # weights = np.ones((self.samples, self.wsize))
         burnin = int(0.1 * self.samples)
-
-        # for index in range(len(lines)):
-        #     line = lines[index]
-        #     w = np.array(list(map(float, line.split(','))))
-        #     weights[index, :] = w
-
-        w_sum = 0
-        std_sum = 0
+        w_sum = np.zeros((self.wsize))
+        std_sum = np.zeros((self.wsize))
 
         for index in range(self.numSources):
             weights = w_transfer[burnin:, index, :]
@@ -236,7 +226,8 @@ class MCMC:
 
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
-        targetrmsefile = open(self.directory+'/targetrmse.csv', 'w')
+        targettrainrmsefile = open(self.directory+'/targettrainrmse.csv', 'w')
+        targettestrmsefile = open(self.directory+'/targettestrmse.csv', 'w')
 
 
 
@@ -253,10 +244,6 @@ class MCMC:
         targettestsize = self.targettestdata.shape[0]
 
         samples = self.samples
-
-        # x_test = np.linspace(0, 1, num=testsize)
-        # x_train = np.linspace(0, 1, num=trainsize)
-        # x_target = np.linspace(0, 1, num=targetsize)
 
         y_train = []
         y_test = []
@@ -330,22 +317,26 @@ class MCMC:
         [likelihood_target, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target, tau_pro_target)
         [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target, tau_pro_target)
 
+        rmsetrain_sample = np.zeros(rmsetrain.shape)
+        rmsetest_sample = np.zeros(rmsetest.shape)
+
+        for index in range(self.numSources):
+            rmsetrain_sample[index] = rmsetrain[index]
+            rmsetest_sample[index] = rmsetest[index]
 
 
-        # # save the information
-        # if save_knowledge:
-        #     np.reshape(w_proposal, (1, w_proposal.shape[0]))
-        #     with open(self.directory+'/wprop.csv', 'w') as wprofile:
-        #         np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
-        #
-        # np.savetxt(trainrmsefile, [rmsetrain])
-        # np.savetxt(testrmsefile, [rmsetest])
-        # np.savetxt(targetrmsefile, [rmsetarget])
-        #
-        # rmsetarget_prev = rmsetarget
-        # rmsetest_prev = rmsetest
-        # rmsetrain_prev = rmsetrain
-        # wpro_prev = w_proposal
+        rmsetrain_prev = rmsetrain
+        rmsetest_prev = rmsetest
+
+        # save the information
+        np.savetxt(trainrmsefile, [rmsetrain_sample])
+        np.savetxt(testrmsefile, [rmsetest_sample])
+
+        np.savetxt(targettrainrmsefile, [rmse_train_target])
+        np.savetxt(targettestrmsefile, [rmse_test_target])
+        # save values into previous variables
+        rmsetargettrain_prev = rmse_train_target
+        rmsetargettest_prev = rmse_test_target
 
         naccept = np.zeros((self.numSources))
         naccept_target = 0
@@ -409,6 +400,8 @@ class MCMC:
 
             u = random.uniform(0, 1)
 
+
+
             for index in xrange(self.numSources):
                 if u < mh_prob[index]:
                     # Update position
@@ -420,43 +413,24 @@ class MCMC:
 
                     # print i, trainacc, rmsetrain
                     elapsed = convert_time(time.time() - start)
-                    # sys.stdout.write(
-                    #     '\rSamples: ' + str(i + 2) + "/" + str(samples)
-                    #     + " Train RMSE: "+ str(rmsetrain)
-                    #     + " Test RMSE: " + str(rmsetest)
-                    #     + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]))
-                    # print ""
-
-                    # save arrays to file
-                    # if save_knowledge:
-                    #     np.reshape(w_proposal, (1, w_proposal.shape[0]))
-                    #     with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                    #             np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
-
-                    # print(pred_train[0], y_train[0])
                     fxtrain_samples[index][i + 1, :, :] = pred_train[index][:,  :]
                     fxtest_samples[index][i + 1, :, :] = pred_test[index][:, :]
 
-                    # np.savetxt(trainrmsefile, [rmsetrain])
-                    # np.savetxt(testrmsefile, [rmsetest])
-                    # np.savetxt(targetrmsefile, [rmsetarget])
+                    rmsetrain_sample[index] = rmsetrain[index]
+                    rmsetest_sample[index] = rmsetest[index]
 
-                    #save values into previous variables
-                    # wpro_prev = w_proposal
-                    # rmsetrain_prev = rmsetrain
-                    # rmsetest_prev = rmsetest
-                    # rmsetarget_prev = rmsetarget
+                    rmsetrain_prev[index] = rmsetrain[index]
+                    rmsetest_prev[index] = rmsetest[index]
 
                 else:
-                    # if save_knowledge:
-                    #     np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
-                    #     with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                    #         np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
                     fxtrain_samples[index][i + 1, :, :] = fxtrain_samples[index][i, :, :]
                     fxtest_samples[index][i + 1, :, :] = fxtest_samples[index][i, :, :]
-                    # np.savetxt(trainrmsefile, [rmsetrain_prev])
-                    # np.savetxt(testrmsefile, [rmsetest_prev])
-                    # np.savetxt(targetrmsefile, [rmsetarget_prev])
+                    rmsetrain_sample[index] = rmsetrain_prev[index]
+                    rmsetest_sample[index] = rmsetest_prev[index]
+
+            np.savetxt(trainrmsefile, [rmsetrain_sample])
+            np.savetxt(testrmsefile, [rmsetest_sample])
+
 
             u = random.uniform(0,1)
             # print mh_prob_target,u
@@ -468,9 +442,14 @@ class MCMC:
                 w_target = w_target_pro
                 eta_target = eta_pro_target
 
-                # fxtrain_samples_target[i + 1, :, :] = pred_train_target[:,  :]
-                # fxtest_samples_target[i + 1, :, :] = pred_test_target[:, :]
                 elapsed = convert_time(time.time() - start)
+                if save_knowledge:
+                    np.savetxt(targettrainrmsefile, [rmse_train_target])
+                    np.savetxt(targettestrmsefile, [rmse_test_target])
+
+                    # save values into previous variables
+                    rmsetargettrain_prev = rmse_train_target
+                    rmsetargettest_prev = rmse_test_target
 
                 sys.stdout.write(
                     '\rSamples: ' + str(i + 2) + "/" + str(samples)
@@ -480,56 +459,73 @@ class MCMC:
                 print ""
 
             else:
-                pass
-                # fxtrain_samples_target[i + 1, :, :] = fxtrain_samples_target[i, :, :]
-                # fxtest_samples_target[i + 1, :, :] = fxtest_samples_target[i, :, :]
-
+                if save_knowledge:
+                    np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
+                    np.savetxt(targettestrmsefile, [rmsetargettest_prev])
 
 
         print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
 
         # Close the files
-        # trainrmsefile.close()
-        # testrmsefile.close()
-        # targetrmsefile.close()
+        trainrmsefile.close()
+        testrmsefile.close()
+        targettrainrmsefile.close()
+        targettestrmsefile.close()
 
         return (fxtrain_samples, fxtest_samples, accept_ratio)
 
-    def get_fx_rmse(self):
+    def get_rmse(self):
         self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
         self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
-        self.rmse_target = np.genfromtxt(self.directory+'/targetrmse.csv')
+        self.rmse_target_train = np.genfromtxt(self.directory+'/targettrainrmse.csv')
+        self.rmse_target_test = np.genfromtxt(self.directory+'/targettestrmse.csv')
+        print self.rmse_test.shape
+
 
     def display_rmse(self):
         burnin = 0.1 * self.samples  # use post burn in samples
-        self.get_fx_rmse()
-        rmse_tr = np.mean(self.rmse_train[int(burnin):])
-        rmsetr_std = np.std(self.rmse_train[int(burnin):])
+        self.get_rmse()
 
-        rmse_tes = np.mean(self.rmse_test[int(burnin):])
-        rmsetest_std = np.std(self.rmse_test[int(burnin):])
+        rmse_tr = [0 for index in xrange(self.numSources)]
+        rmsetr_std = [0 for index in xrange(self.numSources)]
+        rmse_tes = [0 for index in xrange(self.numSources)]
+        rmsetest_std = [0 for index in xrange(self.numSources)]
 
-        rmse_target = np.mean(self.rmse_target[int(burnin):])
-        rmsetarget_std = np.std(self.rmse_target[int(burnin):])
+        for index in xrange(numSources):
+            rmse_tr[index] = np.mean(self.rmse_train[int(burnin):, index])
+            rmsetr_std[index] = np.std(self.rmse_train[int(burnin):, index])
+
+            rmse_tes[index] = np.mean(self.rmse_test[int(burnin):, index])
+            rmsetest_std[index] = np.std(self.rmse_test[int(burnin):, index])
+
+        rmse_target_train = np.mean(self.rmse_target_train[int(burnin):])
+        rmsetarget_std_train = np.std(self.rmse_target_train[int(burnin):])
+
+        rmse_target_test = np.mean(self.rmse_target_test[int(burnin):])
+        rmsetarget_std_test = np.std(self.rmse_target_test[int(burnin):])
 
         print "Train rmse:"
         print "Mean: " + str(rmse_tr) + " Std: " + str(rmsetr_std)
         print "Test rmse:"
         print "Mean: " + str(rmse_tes) + " Std: " + str(rmsetest_std)
-        print "Target rmse:"
-        print "Mean: " + str(rmse_target) + " Std: " + str(rmsetarget_std)
+        print "Target Train rmse:"
+        print "Mean: " + str(rmse_target_train) + " Std: " + str(rmsetarget_std_train)
+        print "Target Test rmse:"
+        print "Mean: " + str(rmse_target_test) + " Std: " + str(rmsetarget_std_test)
         print "\n"
+        print "\n"
+
 
     def plot_rmse(self, dataset):
         if not os.path.isdir(self.directory+'/results'):
             os.mkdir(self.directory+'/results')
 
         ax = plt.subplot(111)
-        plt.plot(range(len(self.rmse_train)), self.rmse_train, 'b.', label="train-rmse")
-        plt.plot(range(len(self.rmse_test)), self.rmse_test, 'c.', label="test-rmse")
-        plt.plot(range(len(self.rmse_target)), self.rmse_target, 'm.', label="target-rmse")
-
+        # print self.rmse_test.shape
+        for index in range(self.numSources):
+            plt.plot(range(len(self.rmse_train[:, index])), self.rmse_train[:, index], label="train-rmse-source-"+str(index+1))
+        plt.plot(range(len(self.rmse_target_train)), self.rmse_target_train, 'm.', label="train-rmse-target")
 
         leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
         leg.get_frame().set_alpha(0.5)
@@ -537,10 +533,23 @@ class MCMC:
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' RMSE plot')
-        plt.savefig(self.directory+'/results/rmse-'+dataset+'-mcmc.png')
+        plt.savefig(self.directory+'/results/rmse-'+dataset+'train-mcmc.png')
         plt.clf()
 
 
+        ax = plt.subplot(111)
+        for index in range(self.numSources):
+            plt.plot(range(len(self.rmse_test[:, index])), self.rmse_test[:, index], label="test-rmse-source-"+str(index+1))
+        plt.plot(range(len(self.rmse_target_test)), self.rmse_target_test, 'm.', label="test-rmse-target")
+
+        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+        leg.get_frame().set_alpha(0.5)
+
+        plt.xlabel('Samples')
+        plt.ylabel('RMSE')
+        plt.title(dataset+' RMSE plot')
+        plt.savefig(self.directory+'/results/rmse-'+dataset+'test-mcmc.png')
+        plt.clf()
 # ------------------------------------------------------- Main --------------------------------------------------------
 
 if __name__ == '__main__':
@@ -591,7 +600,7 @@ if __name__ == '__main__':
     fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, directory='target13')
 
     # display train and test accuracies
-    # mcmc_task.display_rmse()
-    #
-    # # Plot the accuracies and rmse
-    # mcmc_task.plot_rmse('Wifi Loc Task '+str(building_id)+str(floor))
+    mcmc_task.display_rmse()
+
+    # Plot the accuracies and rmse
+    mcmc_task.plot_rmse('Wifi Loc Task 13')
