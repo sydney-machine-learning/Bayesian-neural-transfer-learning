@@ -217,9 +217,9 @@ class MCMC:
         if not os.path.isdir(self.directory):
             os.mkdir(self.directory)
 
-        # trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
-        # testrmsefile = open(self.directory+'/testrmse.csv', 'w')
-        # targetrmsefile = open(self.directory+'/targetrmse.csv', 'w')
+        trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
+        testrmsefile = open(self.directory+'/testrmse.csv', 'w')
+        targetrmsefile = open(self.directory+'/targetrmse.csv', 'w')
 
 
 
@@ -314,7 +314,7 @@ class MCMC:
 
 
 
-        # save the information
+        # # save the information
         # if save_knowledge:
         #     np.reshape(w_proposal, (1, w_proposal.shape[0]))
         #     with open(self.directory+'/wprop.csv', 'w') as wprofile:
@@ -329,7 +329,7 @@ class MCMC:
         # rmsetrain_prev = rmsetrain
         # wpro_prev = w_proposal
 
-        naccept = 0
+        naccept = np.zeros((self.numSources))
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
@@ -342,7 +342,7 @@ class MCMC:
             eta_pro = eta + np.random.normal(0, step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, step_eta, 1)
 
-            print eta_pro
+            # print eta_pro
             tau_pro = np.exp(eta_pro)
             tau_pro_target = np.exp(eta_pro_target)
 
@@ -373,7 +373,7 @@ class MCMC:
             for index in xrange(self.numSources):
                 if u < mh_prob[index]:
                     # Update position
-                    naccept += 1
+                    naccept[index] += 1
                     likelihood[index] = likelihood_proposal[index]
                     prior[index] = prior_prop[index]
                     w[index] = w_proposal[index]
@@ -522,10 +522,10 @@ if __name__ == '__main__':
     w_random = np.random.randn(mcmc_task.wsize)
 
     # start sampling
-    x_train, x_test, fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, directory='target13')
+    fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, directory='target13')
 
     # display train and test accuracies
-    mcmc_task.display_rmse()
-
-    # Plot the accuracies and rmse
-    mcmc_task.plot_rmse('Wifi Loc Task '+str(building_id)+str(floor))
+    # mcmc_task.display_rmse()
+    #
+    # # Plot the accuracies and rmse
+    # mcmc_task.plot_rmse('Wifi Loc Task '+str(building_id)+str(floor))
