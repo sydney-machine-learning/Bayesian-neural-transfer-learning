@@ -192,23 +192,40 @@ class MCMC:
         return w_prop
 
 
-    def transfer(self, stdmulconst):
-        file = open(self.directory+'/wprop.csv', 'rb')
-        lines = file.read().split('\n')[:-1]
+    def transfer(self, stdmulconst, w_transfer, trainsize):
+        # file = open(self.directory+'/wprop.csv', 'rb')
+        # lines = file.read().split('\n')[:-1]
 
-        weights = np.ones((self.samples, self.wsize))
+        # weights = np.ones((self.samples, self.wsize))
         burnin = int(0.1 * self.samples)
 
-        for index in range(len(lines)):
-            line = lines[index]
-            w = np.array(list(map(float, line.split(','))))
-            weights[index, :] = w
+        # for index in range(len(lines)):
+        #     line = lines[index]
+        #     w = np.array(list(map(float, line.split(','))))
+        #     weights[index, :] = w
 
-        weights = weights[burnin:, :]
-        w_mean = weights.mean(axis=0)
-        w_std = stdmulconst * np.std(weights, axis=0)
-        return self.genweights(w_mean, w_std)
+        w_sum = 0
+        std_sum = 0
 
+        for index in range(self.numSources):
+            weights = w_transfer[burnin:, index, :]
+            w_mean = weights.mean(axis=0)
+            w_std = stdmulconst * np.std(weights, axis=0)
+            w_sum += w_mean*trainsize[index]
+            std_sum += w_std*trainsize[index]
+        w_mean = w_sum / float(np.sum(trainsize))
+        std_mean = w_sum / float(np.sum(trainsize))
+        return self.genweights(w_mean, std_mean)
+
+    def find_best(self, weights, y):
+        best_rmse = 999.9
+        for index in range(self.numSources + 1):
+            fx = self.target.evaluate_proposal(self.targettraindata, weights[index])
+            rmse = self.rmse(fx, y)
+            if rmse < best_rmse:
+                best_rmse = rmse
+                best_w = weights[index]
+        return best_w
 
     def sampler(self, w_pretrain, directory, save_knowledge=False):
 
@@ -309,6 +326,7 @@ class MCMC:
             [likelihood[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index], tau_pro[index])
             [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w[index], tau_pro[index])
 
+        prior_target = self.log_prior(sigma_squared, nu_1, nu_2, w_target, tau_pro_target)
         [likelihood_target, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target, tau_pro_target)
         [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target, tau_pro_target)
 
@@ -330,9 +348,11 @@ class MCMC:
         # wpro_prev = w_proposal
 
         naccept = np.zeros((self.numSources))
+        naccept_target = 0
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
+        quantum = int( 0.01 * samples )
 
         for i in range(samples - 1):
 
@@ -350,13 +370,32 @@ class MCMC:
                 [likelihood_proposal[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w_proposal[index], tau_pro[index])
                 [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w_proposal[index], tau_pro[index])
 
-            [likelihood_target_prop, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro, tau_pro_target)
-            [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target_pro, tau_pro_target)
 
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
             for index in xrange(self.numSources):
-                prior_prop[index] = self.log_prior(sigma_squared, nu_1, nu_2 ,w_proposal[index], tau_pro[index])  # takes care of the gradients
+                prior_prop[index] = self.log_prior(sigma_squared, nu_1, nu_2, w_proposal[index], tau_pro[index])  # takes care of the gradients
+
+            if i != 0 and i % quantum == 0:
+                sample_weights = np.vstack([w_proposal, w_target_pro])
+                w_best_target = self.find_best(sample_weights, y_train_target)
+                if not np.array_equal(w_best_target, w_target_pro):
+                    print "weights transfered"
+                w_target_pro = w_best_target
+
+            [likelihood_target_prop, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro, tau_pro_target)
+            [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target_pro, tau_pro_target)
+
+            prior_target_prop = self.log_prior(sigma_squared, nu_1, nu_2, w_target_pro, tau_pro_target)
+
+            diff_likelihood_target = likelihood_target_prop - likelihood_target
+            diff_prior_target = prior_target_prop - prior_target
+            diff_target = min(700, diff_likelihood_target + diff_prior_target)
+            mh_prob_target = min(1, math.exp(diff_target))
+
+            # print i, rmse_train_target, rmse_test_target
+
+
 
 
             diff_likelihood = likelihood_proposal - likelihood
@@ -381,12 +420,12 @@ class MCMC:
 
                     # print i, trainacc, rmsetrain
                     elapsed = convert_time(time.time() - start)
-                    sys.stdout.write(
-                        '\rSamples: ' + str(i + 2) + "/" + str(samples)
-                        + " Train RMSE: "+ str(rmsetrain)
-                        + " Test RMSE: " + str(rmsetest)
-                        + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
-    #                print ""
+                    # sys.stdout.write(
+                    #     '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                    #     + " Train RMSE: "+ str(rmsetrain)
+                    #     + " Test RMSE: " + str(rmsetest)
+                    #     + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]))
+                    # print ""
 
                     # save arrays to file
                     # if save_knowledge:
@@ -418,6 +457,33 @@ class MCMC:
                     # np.savetxt(trainrmsefile, [rmsetrain_prev])
                     # np.savetxt(testrmsefile, [rmsetest_prev])
                     # np.savetxt(targetrmsefile, [rmsetarget_prev])
+
+            u = random.uniform(0,1)
+            # print mh_prob_target,u
+            if u < mh_prob_target:
+                # print "hello"
+                naccept_target += 1
+                likelihood_target = likelihood_target_prop
+                prior_target = prior_target_prop
+                w_target = w_target_pro
+                eta_target = eta_pro_target
+
+                # fxtrain_samples_target[i + 1, :, :] = pred_train_target[:,  :]
+                # fxtest_samples_target[i + 1, :, :] = pred_test_target[:, :]
+                elapsed = convert_time(time.time() - start)
+
+                sys.stdout.write(
+                    '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                    + " Train RMSE: "+ str(rmse_train_target)
+                    + " Test RMSE: " + str(rmse_test_target)
+                    + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]))
+                print ""
+
+            else:
+                pass
+                # fxtrain_samples_target[i + 1, :, :] = fxtrain_samples_target[i, :, :]
+                # fxtest_samples_target[i + 1, :, :] = fxtest_samples_target[i, :, :]
+
 
 
         print naccept / float(samples) * 100.0, '% was accepted'
