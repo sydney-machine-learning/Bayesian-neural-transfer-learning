@@ -229,6 +229,8 @@ class MCMC:
         targettrainrmsefile = open(self.directory+'/targettrainrmse.csv', 'w')
         targettestrmsefile = open(self.directory+'/targettestrmse.csv', 'w')
 
+        targettrftrainrmsefile = open(self.directory+'/targettrftrainrmse.csv', 'w')
+        targettrftestrmsefile = open(self.directory+'/targettrftestrmse.csv', 'w')
 
 
         # ------------------- initialize MCMC
@@ -256,7 +258,7 @@ class MCMC:
         y_train_target = self.targettraindata[:, netw[0]:]
 
 
-        pos_w = np.ones((self.wsize, ))  # posterior of all weights and bias over all samples
+        pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
 
         fxtrain_samples = []
         fxtest_samples = []
@@ -320,6 +322,19 @@ class MCMC:
         rmsetrain_sample = np.zeros(rmsetrain.shape)
         rmsetest_sample = np.zeros(rmsetest.shape)
 
+        w_target_trf = w_target
+
+        likelihood_target_trf = likelihood_target
+        pred_train_target_trf = pred_train_target
+        pred_test_target_trf = pred_test_target
+        rmse_train_target_trf = rmse_train_target
+        rmse_test_target_trf = rmse_test_target
+
+        tau_pro_target_trf = tau_pro_target
+        eta_target_trf = eta_target
+        prior_target_trf = prior_target
+
+
         for index in range(self.numSources):
             rmsetrain_sample[index] = rmsetrain[index]
             rmsetest_sample[index] = rmsetest[index]
@@ -338,8 +353,15 @@ class MCMC:
         rmsetargettrain_prev = rmse_train_target
         rmsetargettest_prev = rmse_test_target
 
+        np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
+        np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
+        # save values into previous variables
+        rmsetargettrftrain_prev = rmse_train_target_trf
+        rmsetargettrftest_prev = rmse_test_target_trf
+
         naccept = np.zeros((self.numSources))
         naccept_target = 0
+        naccept_target_trf = 0
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
@@ -349,30 +371,25 @@ class MCMC:
 
             w_proposal = w + np.random.normal(0, step_w, self.wsize)
             w_target_pro = w_target + np.random.normal(0, step_w, self.wsize)
+            w_target_pro_trf = w_target_trf + np.random.normal(0, step_w, self.wsize)
 
             eta_pro = eta + np.random.normal(0, step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, step_eta, 1)
+            eta_pro_target_trf = eta_pro_target + np.random.normal(0, step_eta, 1)
 
             # print eta_pro
             tau_pro = np.exp(eta_pro)
             tau_pro_target = np.exp(eta_pro_target)
+            tau_pro_target_trf = np.exp(eta_pro_target_trf)
+
 
             for index in xrange(self.numSources):
                 [likelihood_proposal[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w_proposal[index], tau_pro[index])
                 [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w_proposal[index], tau_pro[index])
 
-
-
             # likelihood_ignore  refers to parameter that will not be used in the alg.
             for index in xrange(self.numSources):
                 prior_prop[index] = self.log_prior(sigma_squared, nu_1, nu_2, w_proposal[index], tau_pro[index])  # takes care of the gradients
-
-            if i != 0 and i % quantum == 0:
-                sample_weights = np.vstack([w_proposal, w_target_pro])
-                w_best_target = self.find_best(sample_weights, y_train_target)
-                if not np.array_equal(w_best_target, w_target_pro):
-                    print "weights transfered"
-                w_target_pro = w_best_target
 
             [likelihood_target_prop, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro, tau_pro_target)
             [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target_pro, tau_pro_target)
@@ -384,10 +401,8 @@ class MCMC:
             diff_target = min(700, diff_likelihood_target + diff_prior_target)
             mh_prob_target = min(1, math.exp(diff_target))
 
+
             # print i, rmse_train_target, rmse_test_target
-
-
-
 
             diff_likelihood = likelihood_proposal - likelihood
             diff_prior = prior_prop - prior
@@ -451,18 +466,67 @@ class MCMC:
                     rmsetargettrain_prev = rmse_train_target
                     rmsetargettest_prev = rmse_test_target
 
-                sys.stdout.write(
-                    '\rSamples: ' + str(i + 2) + "/" + str(samples)
-                    + " Train RMSE: "+ str(rmse_train_target)
-                    + " Test RMSE: " + str(rmse_test_target)
-                    + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]))
-                print ""
+                # sys.stdout.write(
+                #     '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                #     + " Train RMSE: "+ str(rmse_train_target)
+                #     + " Test RMSE: " + str(rmse_test_target)
+                #     + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]))
+                # print ""
 
             else:
                 if save_knowledge:
                     np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
                     np.savetxt(targettestrmsefile, [rmsetargettest_prev])
 
+            if i != 0 and i % quantum == 0:
+                sample_weights = np.vstack([w_proposal, w_target_pro_trf])
+                w_best_target = self.find_best(sample_weights, y_train_target)
+                if not np.array_equal(w_best_target, w_target_pro_trf):
+                    print(" weights transfered \n")
+                w_target_pro_trf = w_best_target
+
+            [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_target_pro_trf, tau_pro_target_trf)
+            [likelihood_ignore_trf, pred_test_target_trf, rmse_test_target_trf] = self.likelihood_func(self.target, self.targettestdata, w_target_pro_trf, tau_pro_target_trf)
+
+            prior_target_prop_trf = self.log_prior(sigma_squared, nu_1, nu_2, w_target_pro_trf, tau_pro_target_trf)
+
+            diff_likelihood_target_trf = likelihood_target_prop_trf - likelihood_target_trf
+            diff_prior_target_trf = prior_target_prop_trf - prior_target_trf
+            diff_target_trf = min(700, diff_likelihood_target_trf + diff_prior_target_trf)
+            mh_prob_target_trf = min(1, math.exp(diff_target_trf))
+
+
+
+            u = random.uniform(0,1)
+            # print mh_prob_target,u
+            if u < mh_prob_target_trf:
+                # print "hello"
+                naccept_target_trf += 1
+                likelihood_target_trf = likelihood_target_prop_trf
+                prior_target_trf = prior_target_prop_trf
+                w_target_trf = w_target_pro_trf
+                eta_target_trf = eta_pro_target_trf
+
+                if save_knowledge:
+                    np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
+                    np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
+
+                    # save values into previous variables
+                    rmsetargettrftrain_prev = rmse_train_target_trf
+                    rmsetargettrftest_prev = rmse_test_target_trf
+
+            else:
+                if save_knowledge:
+                    np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
+                    np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
+
+            elapsed = convert_time(time.time() - start)
+            sys.stdout.write(
+                '\rSamples: ' + str(i + 2) + "/" + str(samples)
+                + " Train RMSE (no Transfer): %.5f" %(rmse_train_target)
+                + " Train RMSE (w/ Transfer): %.5f" %(rmse_train_target_trf)
+                + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]))
+            # print ""
 
         print naccept / float(samples) * 100.0, '% was accepted'
         accept_ratio = naccept / (samples * 1.0) * 100
@@ -472,6 +536,8 @@ class MCMC:
         testrmsefile.close()
         targettrainrmsefile.close()
         targettestrmsefile.close()
+        targettrftrainrmsefile.close()
+        targettrftestrmsefile.close()
 
         return (fxtrain_samples, fxtest_samples, accept_ratio)
 
@@ -480,7 +546,9 @@ class MCMC:
         self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
         self.rmse_target_train = np.genfromtxt(self.directory+'/targettrainrmse.csv')
         self.rmse_target_test = np.genfromtxt(self.directory+'/targettestrmse.csv')
-        print self.rmse_test.shape
+        self.rmse_target_train_trf = np.genfromtxt(self.directory+'/targettrftrainrmse.csv')
+        self.rmse_target_test_trf = np.genfromtxt(self.directory+'/targettrftestrmse.csv')
+        # print self.rmse_test.shape
 
 
     def display_rmse(self):
@@ -505,15 +573,25 @@ class MCMC:
         rmse_target_test = np.mean(self.rmse_target_test[int(burnin):])
         rmsetarget_std_test = np.std(self.rmse_target_test[int(burnin):])
 
-        print "Train rmse:"
+
+        rmse_target_train_trf = np.mean(self.rmse_target_train_trf[int(burnin):])
+        rmsetarget_std_train_trf = np.std(self.rmse_target_train_trf[int(burnin):])
+
+        rmse_target_test_trf = np.mean(self.rmse_target_test_trf[int(burnin):])
+        rmsetarget_std_test_trf = np.std(self.rmse_target_test_trf[int(burnin):])
+
+        print "\nTrain rmse:"
         print "Mean: " + str(rmse_tr) + " Std: " + str(rmsetr_std)
         print "Test rmse:"
         print "Mean: " + str(rmse_tes) + " Std: " + str(rmsetest_std)
-        print "Target Train rmse:"
+        print "\nTarget Train rmse w/o transfer:"
         print "Mean: " + str(rmse_target_train) + " Std: " + str(rmsetarget_std_train)
-        print "Target Test rmse:"
+        print "Target Test rmse w/o transfer:"
         print "Mean: " + str(rmse_target_test) + " Std: " + str(rmsetarget_std_test)
-        print "\n"
+        print "\nTarget Train rmse w/ transfer:"
+        print "Mean: " + str(rmse_target_train_trf) + " Std: " + str(rmsetarget_std_train_trf)
+        print "Target Test rmse w/ transfer:"
+        print "Mean: " + str(rmse_target_test_trf) + " Std: " + str(rmsetarget_std_test_trf)
         print "\n"
 
 
@@ -521,11 +599,15 @@ class MCMC:
         if not os.path.isdir(self.directory+'/results'):
             os.mkdir(self.directory+'/results')
 
+        burnin = int(0.1 * self.samples)
+
         ax = plt.subplot(111)
         # print self.rmse_test.shape
-        for index in range(self.numSources):
-            plt.plot(range(len(self.rmse_train[:, index])), self.rmse_train[:, index], label="train-rmse-source-"+str(index+1))
-        plt.plot(range(len(self.rmse_target_train)), self.rmse_target_train, 'm.', label="train-rmse-target")
+        # for index in range(self.numSources):
+        #     plt.plot(range(len(self.rmse_train[:, index])), self.rmse_train[:, index], label="train-rmse-source-"+str(index+1))
+        plt.plot(range(len(self.rmse_target_train[burnin: ])), self.rmse_target_train[burnin: ], '.' , label="train-rmse-target")
+        plt.plot(range(len(self.rmse_target_train_trf[burnin: ])), self.rmse_target_train_trf[burnin: ], '.' , label="train-rmse-target-transfer")
+
 
         leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
         leg.get_frame().set_alpha(0.5)
@@ -538,9 +620,10 @@ class MCMC:
 
 
         ax = plt.subplot(111)
-        for index in range(self.numSources):
-            plt.plot(range(len(self.rmse_test[:, index])), self.rmse_test[:, index], label="test-rmse-source-"+str(index+1))
-        plt.plot(range(len(self.rmse_target_test)), self.rmse_target_test, 'm.', label="test-rmse-target")
+        # for index in range(self.numSources):
+        #     plt.plot(range(len(self.rmse_test[:, index])), self.rmse_test[:, index], label="test-rmse-source-"+str(index+1))
+        plt.plot(range(len(self.rmse_target_test[burnin: ])), self.rmse_target_test[burnin: ], '.' , label="test-rmse-target")
+        plt.plot(range(len(self.rmse_target_test_trf[burnin: ])), self.rmse_target_test_trf[burnin: ], '.' , label="test-rmse-target-transfer")
 
         leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
         leg.get_frame().set_alpha(0.5)
@@ -568,7 +651,7 @@ if __name__ == '__main__':
 
     numSources = 3
     building_id = [1]
-    floor_id  = [0, 1, 2]
+    floor_id  = [0, 2, 3]
     traindata = []
     testdata = []
 
@@ -578,8 +661,8 @@ if __name__ == '__main__':
         testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/validationData/'+str(building_id[0])+str(floor_id[index])+'.csv',
                             delimiter=',')[:, :-2])
 
-    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/13.csv', delimiter=',')[:, :-2]
-    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/13.csv', delimiter=',')[:, :-2]
+    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/11.csv', delimiter=',')[:, :-2]
+    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/11.csv', delimiter=',')[:, :-2]
 
 
     # y_train = traindata[:, input:]
@@ -588,7 +671,7 @@ if __name__ == '__main__':
 
     random.seed(time.time())
 
-    numSamples = 2000# need to decide yourself
+    numSamples = 4000# need to decide yourself
     burnin = 0.1 * numSamples
 
     mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology)  # declare class
@@ -597,7 +680,7 @@ if __name__ == '__main__':
     w_random = np.random.randn(mcmc_task.wsize)
 
     # start sampling
-    fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, directory='target13')
+    fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, directory='target11')
 
     # display train and test accuracies
     mcmc_task.display_rmse()
