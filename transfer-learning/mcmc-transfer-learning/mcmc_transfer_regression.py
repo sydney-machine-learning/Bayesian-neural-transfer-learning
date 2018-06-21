@@ -162,21 +162,22 @@ class MCMC:
         self.createNetworks()
         # ----------------
 
-    def report_progress(self, stdscr, sample_count, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf):
-        stdscr.addstr(0, 0, "Samples Processed: {}/{}".format(sample_count, self.samples))
+    def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse):
+        stdscr.addstr(0, 0, "Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(sample_count, self.samples, elapsed[0], elapsed[1]))
         i = 2
         for index in range(0, self.numSources):
-            stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index))
+            stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index + 1))
             stdscr.addstr(index + i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmsetrain[index], rmsetest[index]))
             i += 2
 
-        i += 1
-        stdscr.addstr(index + i, 3, "Target w/o transfer Progress:")
-        stdscr.addstr(index + i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target, rmse_test_target))
+        i = index + i + 2
+        stdscr.addstr(i, 3, "Target w/o transfer Progress:")
+        stdscr.addstr(i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target, rmse_test_target))
 
-        i += 3
-        stdscr.addstr(index + i, 3, "Target w/ transfer Progress:")
-        stdscr.addstr(index + i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
+        i += 4
+        stdscr.addstr(i, 3, "Target w/ transfer Progress:")
+        stdscr.addstr(i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
+        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered RMSE: {:.4f}".format(last_transfer, last_transfer_rmse) )
 
         stdscr.refresh()
 
@@ -234,7 +235,7 @@ class MCMC:
             if rmse < best_rmse:
                 best_rmse = rmse
                 best_w = weights[index]
-        return best_w
+        return best_w, best_rmse
 
     def sampler(self, w_pretrain, directory, stdscr, save_knowledge=False):
 
@@ -386,6 +387,9 @@ class MCMC:
         prior_prop = np.zeros((self.numSources))
         quantum = int( 0.01 * samples )
 
+        last_transfer  = 0
+        last_transfer_rmse = 0
+
         for i in range(samples - 1):
 
             w_proposal = w + np.random.normal(0, step_w, self.wsize)
@@ -493,9 +497,11 @@ class MCMC:
 
             if i != 0 and i % quantum == 0:
                 sample_weights = np.vstack([w_proposal, w_target_pro_trf])
-                w_best_target = self.find_best(sample_weights, y_train_target)
+                w_best_target, rmse_best = self.find_best(sample_weights, y_train_target)
                 if not np.array_equal(w_best_target, w_target_pro_trf):
                    # print(" weights transfered \n")
+                   last_transfer = i
+                   last_transfer_rmse = rmse_best
                    pass
                 w_target_pro_trf = w_best_target
 
@@ -508,7 +514,6 @@ class MCMC:
             diff_prior_target_trf = prior_target_prop_trf - prior_target_trf
             diff_target_trf = min(700, diff_likelihood_target_trf + diff_prior_target_trf)
             mh_prob_target_trf = min(1, math.exp(diff_target_trf))
-
 
 
             u = random.uniform(0,1)
@@ -535,7 +540,7 @@ class MCMC:
                     np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
 
             elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, i, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev)
+            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse)
 
         stdscr.clear()
         stdscr.refresh()
@@ -690,7 +695,7 @@ if __name__ == '__main__':
 
     random.seed(time.time())
 
-    numSamples = 3000# need to decide yourself
+    numSamples = 2000# need to decide yourself
     burnin = 0.1 * numSamples
 
     mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology)  # declare class
