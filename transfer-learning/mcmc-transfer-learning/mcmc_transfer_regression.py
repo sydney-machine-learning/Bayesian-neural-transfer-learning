@@ -219,21 +219,25 @@ class MCMC:
         return w_prop
 
 
-    def transfer(self, w_transfer, trainsize, stdmulconst=1.2):
-        # burnin = int(0.1 * self.samples)
-        w_sum = np.zeros((self.wsize))
-        std_sum = np.zeros((self.wsize))
-
+    def transfer(self, w_transfer, w_pro_trf):
+#        # burnin = int(0.1 * self.samples)
+#        w_sum = np.zeros((self.wsize))
+#        std_sum = np.zeros((self.wsize))
+        indices = np.random.uniform(low=0, high=self.wsize, size=(self.transfersize)).astype('int')
+        w_pro = np.zeros(w_transfer.shape)
         for index in range(w_transfer.shape[0]):
-            weights = w_transfer[index, :]
-            # w_mean = weights.mean(axis=0)
-            # w_std = stdmulconst * np.std(weights, axis=0)
-            w_sum += weights*trainsize[index]
-            # std_sum += w_std*trainsize[index]
-        w_mean = w_sum / float(np.sum(trainsize))
-        # std_mean = w_sum / float(np.sum(trainsize))
-        # return self.genweights(w_mean, std_mean)
-        return w_mean
+            for transfer_index in indices:
+                w_pro[index, :] = w_pro_trf
+                w_pro[index, transfer_index] = w_transfer[index, transfer_index] 
+#            weights = w_transfer[index, :]
+#            # w_mean = weights.mean(axis=0)
+#            # w_std = stdmulconst * np.std(weights, axis=0)
+#            w_sum += weights*trainsize[index]
+#            # std_sum += w_std*trainsize[index]
+#        w_mean = w_sum / float(np.sum(trainsize))
+#        # std_mean = w_sum / float(np.sum(trainsize))
+#        # return self.genweights(w_mean, std_mean)
+        return w_pro
 
     def find_best(self, weights, y):
         best_rmse = 999.9
@@ -271,6 +275,7 @@ class MCMC:
 
         samples = self.samples
 
+
         y_train = []
         y_test = []
         netw = self.topology  # [input, hidden, output]
@@ -283,6 +288,7 @@ class MCMC:
 
 
         pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
+        self.transfersize = netw[0] * netw[1]
 
         fxtrain_samples = []
         fxtest_samples = []
@@ -501,8 +507,9 @@ class MCMC:
                     np.savetxt(targettestrmsefile, [rmsetargettest_prev])
 
             if i != 0 and i % quantum == 0:
-                # sample_weights = self.transfer(w_proposal, trainsize)
-                sample_weights = np.vstack([w_proposal, w_target_pro_trf])
+                self.transfersize = random.randint(1, self.wsize+1)
+                sample_weights = self.transfer(w_proposal, w_target_pro_trf)
+                sample_weights = np.vstack([sample_weights, w_target_pro_trf])
                 w_best_target, rmse_best, source_index = self.find_best(sample_weights, y_train_target)
                 if not np.array_equal(w_best_target, w_target_pro_trf):
                    # print(" weights transfered \n")
@@ -662,7 +669,7 @@ if __name__ == '__main__':
 
 
     input = 520
-    hidden = 35
+    hidden = 45
     output = 2
     topology = [input, hidden, output]
 
@@ -707,17 +714,17 @@ if __name__ == '__main__':
 
     random.seed(time.time())
 
-    numSamples = 1500# need to decide yourself
+    numSamples = 2000# need to decide yourself
     burnin = 0.1 * numSamples
 
     try:
-        mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIImdoorData/building1/')  # declare class
+        mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='building1/')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
 
     # start sampling
-#        fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, stdscr=stdscr)
+        fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, stdscr=stdscr)
         # display train and test accuracies
         mcmc_task.display_rmse()
     finally:
