@@ -22,7 +22,7 @@ for index in range(len(building_id)):
     rmsetrain_trf = np.genfromtxt('building'+str(building)+'/targettrftrainrmse.csv')
     rmsetest_trf = np.genfromtxt('building'+str(building)+'/targettrftestrmse.csv')
     
-    burnin = int(0.1 * rmsetrain_trf.shape[0])
+    burnin = int(0.2 * rmsetrain_trf.shape[0])
     stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
     stdtest_trf = rmsetest_trf[burnin: ].std(axis=0)
     rmsetrain_trf_mu = rmsetrain_trf[burnin: ].mean(axis=0)
@@ -37,7 +37,7 @@ for index in range(len(building_id)):
     # rmse and std for w/o transfer results
     rmsetrain = np.genfromtxt('building'+str(building)+'/targettrainrmse.csv')
     rmsetest = np.genfromtxt('building'+str(building)+'/targettestrmse.csv')
-    burnin = int(0.1 * rmsetrain.shape[0])
+    burnin = int(0.2 * rmsetrain.shape[0])
     stdtrain = rmsetrain[burnin: ].std(axis=0)
     stdtest = rmsetest[burnin: ].std(axis=0)
     rmsetrain_mu = rmsetrain[burnin: ].mean(axis=0)
