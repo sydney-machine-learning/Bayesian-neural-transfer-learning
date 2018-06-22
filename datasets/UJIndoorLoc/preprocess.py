@@ -28,7 +28,7 @@ def normalizedata(data):
 trainfile = 'trainingData.csv'
 validationfile = 'validationData.csv'
 
-building = {}
+
 traindata = np.genfromtxt(trainfile, delimiter=',', skip_header=1)
 validationdata = np.genfromtxt(validationfile, delimiter=',', skip_header=1)
 
@@ -52,6 +52,7 @@ print traindata.shape, validationdata.shape
 datadict = {'trainingData':traindata, 'validationData':validationdata}
 
 for file, data in datadict.items():
+    building = {}
     for index in range(data.shape[0]):
         building_id = int(data[index, -1])
         try:

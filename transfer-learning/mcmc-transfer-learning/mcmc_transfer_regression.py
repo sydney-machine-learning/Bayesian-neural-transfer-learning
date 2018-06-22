@@ -150,7 +150,7 @@ class Network:
 
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
 class MCMC:
-    def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology):
+    def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology, directory):
         self.samples = samples  # NN topology [input, hidden, output]
         self.topology = topology  # max epocs
         self.traindata = traindata  #
@@ -158,13 +158,20 @@ class MCMC:
         self.targettraindata = targettraindata
         self.targettestdata = targettestdata
         self.numSources = sources
+        
+        # Create file objects to write the attributes of the samples
+        self.directory = directory
+        if not os.path.isdir(self.directory):
+            os.mkdir(self.directory)
+        
         self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
         self.createNetworks()
         # ----------------
 
-    def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse):
+    def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse, source_index):
         stdscr.addstr(0, 0, "Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(sample_count, self.samples, elapsed[0], elapsed[1]))
         i = 2
+        index = 0
         for index in range(0, self.numSources):
             stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index + 1))
             stdscr.addstr(index + i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmsetrain[index], rmsetest[index]))
@@ -177,7 +184,7 @@ class MCMC:
         i += 4
         stdscr.addstr(i, 3, "Target w/ transfer Progress:")
         stdscr.addstr(i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
-        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered RMSE: {:.4f}".format(last_transfer, last_transfer_rmse) )
+        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered RMSE: {:.4f} Source index: {}  ".format(last_transfer, last_transfer_rmse, source_index) )
 
         stdscr.refresh()
 
@@ -212,37 +219,34 @@ class MCMC:
         return w_prop
 
 
-    def transfer(self, stdmulconst, w_transfer, trainsize):
-        burnin = int(0.1 * self.samples)
+    def transfer(self, w_transfer, trainsize, stdmulconst=1.2):
+        # burnin = int(0.1 * self.samples)
         w_sum = np.zeros((self.wsize))
         std_sum = np.zeros((self.wsize))
 
-        for index in range(self.numSources):
-            weights = w_transfer[burnin:, index, :]
-            w_mean = weights.mean(axis=0)
-            w_std = stdmulconst * np.std(weights, axis=0)
-            w_sum += w_mean*trainsize[index]
-            std_sum += w_std*trainsize[index]
+        for index in range(w_transfer.shape[0]):
+            weights = w_transfer[index, :]
+            # w_mean = weights.mean(axis=0)
+            # w_std = stdmulconst * np.std(weights, axis=0)
+            w_sum += weights*trainsize[index]
+            # std_sum += w_std*trainsize[index]
         w_mean = w_sum / float(np.sum(trainsize))
-        std_mean = w_sum / float(np.sum(trainsize))
-        return self.genweights(w_mean, std_mean)
+        # std_mean = w_sum / float(np.sum(trainsize))
+        # return self.genweights(w_mean, std_mean)
+        return w_mean
 
     def find_best(self, weights, y):
         best_rmse = 999.9
-        for index in range(self.numSources + 1):
+        for index in range(weights.shape[0]):
             fx = self.target.evaluate_proposal(self.targettraindata, weights[index])
             rmse = self.rmse(fx, y)
             if rmse < best_rmse:
                 best_rmse = rmse
                 best_w = weights[index]
-        return best_w, best_rmse
+                best_index = index
+        return best_w, best_rmse, best_index + 1
 
-    def sampler(self, w_pretrain, directory, stdscr, save_knowledge=False):
-
-        # Create file objects to write the attributes of the samples
-        self.directory = directory
-        if not os.path.isdir(self.directory):
-            os.mkdir(self.directory)
+    def sampler(self, w_pretrain, stdscr, save_knowledge=False):
 
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
@@ -389,6 +393,7 @@ class MCMC:
 
         last_transfer  = 0
         last_transfer_rmse = 0
+        source_index = None
 
         for i in range(samples - 1):
 
@@ -496,13 +501,14 @@ class MCMC:
                     np.savetxt(targettestrmsefile, [rmsetargettest_prev])
 
             if i != 0 and i % quantum == 0:
+                # sample_weights = self.transfer(w_proposal, trainsize)
                 sample_weights = np.vstack([w_proposal, w_target_pro_trf])
-                w_best_target, rmse_best = self.find_best(sample_weights, y_train_target)
+                w_best_target, rmse_best, source_index = self.find_best(sample_weights, y_train_target)
                 if not np.array_equal(w_best_target, w_target_pro_trf):
                    # print(" weights transfered \n")
                    last_transfer = i
                    last_transfer_rmse = rmse_best
-                   pass
+
                 w_target_pro_trf = w_best_target
 
             [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_target_pro_trf, tau_pro_target_trf)
@@ -540,7 +546,7 @@ class MCMC:
                     np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
 
             elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse)
+            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index)
 
         stdscr.clear()
         stdscr.refresh()
@@ -563,6 +569,9 @@ class MCMC:
     def get_rmse(self):
         self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
         self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
+        if self.numSources == 1:
+            self.rmse_test = self.rmse_test.reshape((self.rmse_test.shape[0], 1))
+            self.rmse_train = self.rmse_train.reshape((self.rmse_train.shape[0], 1))            
         self.rmse_target_train = np.genfromtxt(self.directory+'/targettrainrmse.csv')
         self.rmse_target_test = np.genfromtxt(self.directory+'/targettestrmse.csv')
         self.rmse_target_train_trf = np.genfromtxt(self.directory+'/targettrftrainrmse.csv')
@@ -622,16 +631,12 @@ class MCMC:
         burnin = int(0.1 * self.samples)
 
         ax = plt.subplot(111)
-        # print self.rmse_test.shape
-        # for index in range(self.numSources):
-        #     plt.plot(range(len(self.rmse_train[:, index])), self.rmse_train[:, index], label="train-rmse-source-"+str(index+1))
-        plt.plot(range(len(self.rmse_target_train[burnin: ])), self.rmse_target_train[burnin: ], '.' , label="train-rmse-target")
-        plt.plot(range(len(self.rmse_target_train_trf[burnin: ])), self.rmse_target_train_trf[burnin: ], '.' , label="train-rmse-target-transfer")
-
-
+        x = np.array(np.arange(burnin, self.samples))
+        plt.plot(x, self.rmse_target_train[burnin: ], '.' , label="train-rmse-target")
+        plt.plot(x, self.rmse_target_train_trf[burnin: ], '.' , label="train-rmse-target-transfer")
         leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
         leg.get_frame().set_alpha(0.5)
-
+#        plt.xticks(x)
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' RMSE plot')
@@ -640,14 +645,11 @@ class MCMC:
 
 
         ax = plt.subplot(111)
-        # for index in range(self.numSources):
-        #     plt.plot(range(len(self.rmse_test[:, index])), self.rmse_test[:, index], label="test-rmse-source-"+str(index+1))
-        plt.plot(range(len(self.rmse_target_test[burnin: ])), self.rmse_target_test[burnin: ], '.' , label="test-rmse-target")
-        plt.plot(range(len(self.rmse_target_test_trf[burnin: ])), self.rmse_target_test_trf[burnin: ], '.' , label="test-rmse-target-transfer")
-
+        plt.plot(x, self.rmse_target_test[burnin: ], '.' , label="test-rmse-target")
+        plt.plot(x, self.rmse_target_test_trf[burnin: ], '.' , label="test-rmse-target-transfer")
         leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
         leg.get_frame().set_alpha(0.5)
-
+#        plt.xticks(x)
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' RMSE plot')
@@ -657,9 +659,7 @@ class MCMC:
 
 if __name__ == '__main__':
 
-    stdscr = curses.initscr()
-    curses.noecho()
-    curses.cbreak()
+
 
     input = 520
     hidden = 35
@@ -673,20 +673,32 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 3
-    building_id = [2]
-    floor_id  = [1, 2, 3]
+    numSources = 1
+    building_id = [0, 1, 2]
+    floor_id  = [0, 1, 2, 3]
     traindata = []
     testdata = []
 
-    for index in xrange(numSources):
-        traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/'+str(building_id[0])+str(floor_id[index])+'.csv',
-                            delimiter=',')[:, :-2])
-        testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/validationData/'+str(building_id[0])+str(floor_id[index])+'.csv',
-                            delimiter=',')[:, :-2])
+    # for building in building_id:
+    #     for floor in floor_id:
+    traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData1train.csv',
+                                delimiter=',')[:, :-2])
+    testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData1test.csv',
+                                delimiter=',')[:, :-2])
 
-    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/20.csv', delimiter=',')[:, :-2]
-    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/20.csv', delimiter=',')[:, :-2]
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
+
+    # targettraindata1 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/20.csv', delimiter=',')[:, :-2]
+    # targettraindata2 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/21.csv', delimiter=',')[:, :-2]
+    # targettraindata3 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/22.csv', delimiter=',')[:, :-2]
+    # targettraindata4 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/23.csv', delimiter=',')[:, :-2]
+    #
+    # targettraindata = np.vstack([targettraindata1, targettraindata2, targettraindata3, targettraindata4])
+
+    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData1train.csv', delimiter=',')[:, :-2]
+    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData1test.csv', delimiter=',')[:, :-2]
 
 
     # y_train = traindata[:, input:]
@@ -695,17 +707,17 @@ if __name__ == '__main__':
 
     random.seed(time.time())
 
-    numSamples = 2000# need to decide yourself
+    numSamples = 1500# need to decide yourself
     burnin = 0.1 * numSamples
 
-    mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology)  # declare class
+    try:
+        mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIImdoorData/building1/')  # declare class
 
-    # generate random weights
-    w_random = np.random.randn(mcmc_task.wsize)
+        # generate random weights
+        w_random = np.random.randn(mcmc_task.wsize)
 
     # start sampling
-    try:
-        fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, directory='target20', stdscr=stdscr)
+#        fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, stdscr=stdscr)
         # display train and test accuracies
         mcmc_task.display_rmse()
     finally:
@@ -714,4 +726,4 @@ if __name__ == '__main__':
         curses.endwin()
 
     # Plot the accuracies and rmse
-    mcmc_task.plot_rmse('Wifi Loc Task 13')
+    mcmc_task.plot_rmse('Wifi Loc Task Building 1')
