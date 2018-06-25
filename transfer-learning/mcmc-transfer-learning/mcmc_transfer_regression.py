@@ -149,7 +149,7 @@ class Network:
         return (sse / testSize, float(clasPerf) / testSize * 100)
 
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
-class MCMC:
+class TransferLearningMCMC:
     def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology, directory):
         self.samples = samples  # NN topology [input, hidden, output]
         self.topology = topology  # max epocs
@@ -158,14 +158,16 @@ class MCMC:
         self.targettraindata = targettraindata
         self.targettestdata = targettestdata
         self.numSources = sources
-        
+
         # Create file objects to write the attributes of the samples
         self.directory = directory
         if not os.path.isdir(self.directory):
             os.mkdir(self.directory)
-        
+
         self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
         self.createNetworks()
+        self.wsize_target = (self.targetTop[0] * self.targetTop[1]) + (self.targetTop[1] * self.targetTop[2]) + self.targetTop[1] + self.targetTop[2]
+
         # ----------------
 
     def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse, source_index):
@@ -192,7 +194,10 @@ class MCMC:
         self.sources = []
         for index in range(self.numSources):
             self.sources.append(Network(self.topology, self.traindata[index], self.testdata[index]))
-        self.target = Network(self.topology, self.targettraindata, self.targettestdata)
+        self.targetTop = self.topology.copy()
+        self.targetTop[1] = int(1.0 * self.topology[1])
+        self.target = Network(self.targetTop, self.targettraindata, self.targettestdata)
+
 
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
@@ -219,25 +224,35 @@ class MCMC:
         return w_prop
 
 
-    def transfer(self, w_transfer, w_pro_trf):
-#        # burnin = int(0.1 * self.samples)
-#        w_sum = np.zeros((self.wsize))
-#        std_sum = np.zeros((self.wsize))
-        indices = np.random.uniform(low=0, high=self.wsize, size=(self.transfersize)).astype('int')
-        w_pro = np.zeros(w_transfer.shape)
-        for index in range(w_transfer.shape[0]):
-            for transfer_index in indices:
-                w_pro[index, :] = w_pro_trf
-                w_pro[index, transfer_index] = w_transfer[index, transfer_index] 
-#            weights = w_transfer[index, :]
-#            # w_mean = weights.mean(axis=0)
-#            # w_std = stdmulconst * np.std(weights, axis=0)
-#            w_sum += weights*trainsize[index]
-#            # std_sum += w_std*trainsize[index]
-#        w_mean = w_sum / float(np.sum(trainsize))
-#        # std_mean = w_sum / float(np.sum(trainsize))
-#        # return self.genweights(w_mean, std_mean)
-        return w_pro
+#     def transfer(self, w_transfer, w_pro_trf):
+# #        # burnin = int(0.1 * self.samples)
+# #        w_sum = np.zeros((self.wsize))
+# #        std_sum = np.zeros((self.wsize))
+#         indices = np.random.uniform(low=0, high=self.wsize, size=(self.transfersize)).astype('int')
+#         w_pro = np.zeros(w_transfer.shape)
+#         for index in range(w_transfer.shape[0]):
+#             for transfer_index in indices:
+#                 w_pro[index, :] = w_pro_trf
+#                 w_pro[index, transfer_index] = w_transfer[index, transfer_index]
+# #            weights = w_transfer[index, :]
+# #            # w_mean = weights.mean(axis=0)
+# #            # w_std = stdmulconst * np.std(weights, axis=0)
+# #            w_sum += weights*trainsize[index]
+# #            # std_sum += w_std*trainsize[index]
+# #        w_mean = w_sum / float(np.sum(trainsize))
+# #        # std_mean = w_sum / float(np.sum(trainsize))
+# #        # return self.genweights(w_mean, std_mean)
+#         return w_pro
+
+    def transfer(self, w_sources, w_target):
+        w_prop = np.zeros((w_sources.shape[0], w_target.shape[0]))
+        for index in range(w_sources.shape[0]):
+            w_prop[index, :] = w_target[:]
+            # print(w_prop.shape)
+            w_prop[index, :self.topology[0]*self.topology[1] + self.topology[1]] = w_sources[index, : self.topology[0]*self.topology[1] + self.topology[1]]
+            w_prop[index, self.targetTop[0]*self.targetTop[1] + self.targetTop[1] : self.targetTop[0]*self.targetTop[1] + self.targetTop[1] + self.topology[1] * self.topology[2] + self.topology[2]] = w_sources[index, self.topology[0]*self.topology[1] +self.topology[1]:]
+        return w_prop
+
 
     def find_best(self, weights, y):
         best_rmse = 999.9
@@ -250,7 +265,7 @@ class MCMC:
                 best_index = index
         return best_w, best_rmse, best_index + 1
 
-    def sampler(self, w_pretrain, stdscr, save_knowledge=False):
+    def sampler(self, w_pretrain, w_pretrain_target, stdscr, save_knowledge=False):
 
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
@@ -279,6 +294,7 @@ class MCMC:
         y_train = []
         y_test = []
         netw = self.topology  # [input, hidden, output]
+        netw_target = self.targetTop
         for index in range(self.numSources):
             y_test.append(self.testdata[index][:, netw[0]:])
             y_train.append(self.traindata[index][:, netw[0]:])
@@ -296,8 +312,8 @@ class MCMC:
             fxtrain_samples.append(np.ones((int(samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
             fxtest_samples.append(np.ones((int(samples), int(testsize[index]), netw[2])))  # fx of test data over all samples
 
-        fxtarget_train_samples = np.ones((samples, targettrainsize, netw[2])) #fx of target train data over all samples
-        fxtarget_test_samples = np.ones((samples, targettestsize, netw[2])) #fx of target test data over all samples
+        fxtarget_train_samples = np.ones((samples, targettrainsize, netw_target[2])) #fx of target train data over all samples
+        fxtarget_test_samples = np.ones((samples, targettestsize, netw_target[2])) #fx of target test data over all samples
 
         w = np.zeros((self.numSources, self.wsize))
         w_proposal = np.zeros((self.numSources, self.wsize))
@@ -305,8 +321,8 @@ class MCMC:
             w[index] = w_pretrain
             w_proposal[index] = w_pretrain
 
-        w_target = w_pretrain
-        w_target_pro = w_pretrain
+        w_target = w_pretrain_target
+        w_target_pro = w_pretrain_target
 
         step_w = 0.02  # defines how much variation you need in changes to w
         step_eta = 0.01
@@ -395,7 +411,7 @@ class MCMC:
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
-        quantum = int( 0.01 * samples )
+        quantum = int( 0.1 * samples )
 
         last_transfer  = 0
         last_transfer_rmse = 0
@@ -404,8 +420,8 @@ class MCMC:
         for i in range(samples - 1):
 
             w_proposal = w + np.random.normal(0, step_w, self.wsize)
-            w_target_pro = w_target + np.random.normal(0, step_w, self.wsize)
-            w_target_pro_trf = w_target_trf + np.random.normal(0, step_w, self.wsize)
+            w_target_pro = w_target + np.random.normal(0, step_w, self.wsize_target)
+            w_target_pro_trf = w_target_trf + np.random.normal(0, step_w, self.wsize_target)
 
             eta_pro = eta + np.random.normal(0, step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, step_eta, 1)
@@ -532,7 +548,6 @@ class MCMC:
             u = random.uniform(0,1)
             # print mh_prob_target,u
             if u < mh_prob_target_trf:
-                # print "hello"
                 naccept_target_trf += 1
                 likelihood_target_trf = likelihood_target_prop_trf
                 prior_target_trf = prior_target_prop_trf
@@ -578,7 +593,7 @@ class MCMC:
         self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
         if self.numSources == 1:
             self.rmse_test = self.rmse_test.reshape((self.rmse_test.shape[0], 1))
-            self.rmse_train = self.rmse_train.reshape((self.rmse_train.shape[0], 1))            
+            self.rmse_train = self.rmse_train.reshape((self.rmse_train.shape[0], 1))
         self.rmse_target_train = np.genfromtxt(self.directory+'/targettrainrmse.csv')
         self.rmse_target_test = np.genfromtxt(self.directory+'/targettestrmse.csv')
         self.rmse_target_train_trf = np.genfromtxt(self.directory+'/targettrftrainrmse.csv')
@@ -646,7 +661,7 @@ class MCMC:
 #        leg.get_frame().set_alpha(0.5)
 #        plt.xticks(x)
         plt.xlabel('Samples')
-        plt.ylabel('RMSE') 
+        plt.ylabel('RMSE')
         plt.title(dataset+' Train RMSE')
         plt.savefig(self.directory+'/results/rmse-'+dataset+'train-mcmc.png')
         plt.clf()
@@ -671,7 +686,7 @@ if __name__ == '__main__':
 
 
     input = 520
-    hidden = 50
+    hidden = 45
     output = 2
     topology = [input, hidden, output]
 
@@ -720,13 +735,14 @@ if __name__ == '__main__':
     burnin = 0.1 * numSamples
 
     try:
-        mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIndoorData/building1')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='building1')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
+        w_random_target = np.random.randn(mcmc_task.wsize_target)
 
     # start sampling
-        fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, save_knowledge=True, stdscr=stdscr)
+        fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
         # display train and test accuracies
         mcmc_task.display_rmse()
     finally:
