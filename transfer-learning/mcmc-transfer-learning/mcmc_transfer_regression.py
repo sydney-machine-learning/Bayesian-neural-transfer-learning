@@ -110,7 +110,7 @@ class Network:
         Desired = np.zeros((1, self.Top[2]))
         fx = np.zeros((size,self.Top[2]))
 
-        for i in xrange(0, size):  # to see what fx is produced by your current weight update
+        for i in range(0, size):  # to see what fx is produced by your current weight update
             Input = data[i, 0:self.Top[0]]
             self.ForwardPass(Input)
             fx[i] = self.out
@@ -135,7 +135,7 @@ class Network:
         self.B1 = self.BestB1
         self.B2 = self.BestB2  # load best knowledge
 
-        for s in xrange(0, testSize):
+        for s in range(0, testSize):
 
             Input[:] = Data[s, 0:self.Top[0]]
             Desired[:] = Data[s, self.Top[0]:]
@@ -190,7 +190,7 @@ class MCMC:
 
     def createNetworks(self):
         self.sources = []
-        for index in xrange(self.numSources):
+        for index in range(self.numSources):
             self.sources.append(Network(self.topology, self.traindata[index], self.testdata[index]))
         self.target = Network(self.topology, self.targettraindata, self.targettestdata)
 
@@ -266,7 +266,7 @@ class MCMC:
         start = time.time()
         trainsize = np.zeros((self.numSources))
         testsize = np.zeros((self.numSources))
-        for index in xrange(self.numSources):
+        for index in range(self.numSources):
             trainsize[index] = self.traindata[index].shape[0]
             testsize[index] = self.testdata[index].shape[0]
 
@@ -279,7 +279,7 @@ class MCMC:
         y_train = []
         y_test = []
         netw = self.topology  # [input, hidden, output]
-        for index in xrange(self.numSources):
+        for index in range(self.numSources):
             y_test.append(self.testdata[index][:, netw[0]:])
             y_train.append(self.traindata[index][:, netw[0]:])
 
@@ -292,7 +292,7 @@ class MCMC:
 
         fxtrain_samples = []
         fxtest_samples = []
-        for index in xrange(self.numSources):
+        for index in range(self.numSources):
             fxtrain_samples.append(np.ones((int(samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
             fxtest_samples.append(np.ones((int(samples), int(testsize[index]), netw[2])))  # fx of test data over all samples
 
@@ -301,7 +301,7 @@ class MCMC:
 
         w = np.zeros((self.numSources, self.wsize))
         w_proposal = np.zeros((self.numSources, self.wsize))
-        for index in xrange(self.numSources):
+        for index in range(self.numSources):
             w[index] = w_pretrain
             w_proposal[index] = w_pretrain
 
@@ -320,7 +320,7 @@ class MCMC:
         eta = np.zeros((self.numSources))
         tau_pro = np.zeros((self.numSources))
 
-        for index in xrange(self.numSources):
+        for index in range(self.numSources):
             pred_train.append(self.sources[index].evaluate_proposal(self.traindata[index], w[index]))
             pred_test.append(self.sources[index].evaluate_proposal(self.testdata[index], w[index]))
             eta[index] = np.log(np.var(pred_train[index] - y_train[index]))
@@ -340,7 +340,7 @@ class MCMC:
         rmsetrain = np.zeros((self.numSources))
         rmsetest = np.zeros((self.numSources))
 
-        for index in xrange(self.numSources):
+        for index in range(self.numSources):
             prior[index] = self.log_prior(sigma_squared, nu_1, nu_2, w[index], tau_pro[index])  # takes care of the gradients
             [likelihood[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index], tau_pro[index])
             [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w[index], tau_pro[index])
@@ -417,12 +417,12 @@ class MCMC:
             tau_pro_target_trf = np.exp(eta_pro_target_trf)
 
 
-            for index in xrange(self.numSources):
+            for index in range(self.numSources):
                 [likelihood_proposal[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w_proposal[index], tau_pro[index])
                 [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w_proposal[index], tau_pro[index])
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
-            for index in xrange(self.numSources):
+            for index in range(self.numSources):
                 prior_prop[index] = self.log_prior(sigma_squared, nu_1, nu_2, w_proposal[index], tau_pro[index])  # takes care of the gradients
 
             [likelihood_target_prop, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro, tau_pro_target)
@@ -443,7 +443,7 @@ class MCMC:
             diff = np.zeros(diff_prior.shape)
             mh_prob = np.zeros(diff.shape)
 
-            for index in xrange(self.numSources):
+            for index in range(self.numSources):
                 diff[index] = min(700, diff_likelihood[index] + diff_prior[index])
                 mh_prob[index] = min(1, math.exp(diff[index]))
 
@@ -451,7 +451,7 @@ class MCMC:
 
 
 
-            for index in xrange(self.numSources):
+            for index in range(self.numSources):
                 if u < mh_prob[index]:
                     # Update position
                     naccept[index] += 1
@@ -507,9 +507,9 @@ class MCMC:
                     np.savetxt(targettestrmsefile, [rmsetargettest_prev])
 
             if i != 0 and i % quantum == 0:
-                self.transfersize = random.randint(1, self.wsize+1)
-                sample_weights = self.transfer(w_proposal, w_target_pro_trf)
-                sample_weights = np.vstack([sample_weights, w_target_pro_trf])
+#                self.transfersize = random.randint(1, self.wsize+1)
+#                sample_weights = self.transfer(w_proposal, w_target_pro_trf)
+                sample_weights = np.vstack([w_proposal, w_target_pro_trf])
                 w_best_target, rmse_best, source_index = self.find_best(sample_weights, y_train_target)
                 if not np.array_equal(w_best_target, w_target_pro_trf):
                    # print(" weights transfered \n")
@@ -590,12 +590,12 @@ class MCMC:
         burnin = 0.1 * self.samples  # use post burn in samples
         self.get_rmse()
 
-        rmse_tr = [0 for index in xrange(self.numSources)]
-        rmsetr_std = [0 for index in xrange(self.numSources)]
-        rmse_tes = [0 for index in xrange(self.numSources)]
-        rmsetest_std = [0 for index in xrange(self.numSources)]
+        rmse_tr = [0 for index in range(self.numSources)]
+        rmsetr_std = [0 for index in range(self.numSources)]
+        rmse_tes = [0 for index in range(self.numSources)]
+        rmsetest_std = [0 for index in range(self.numSources)]
 
-        for index in xrange(numSources):
+        for index in range(numSources):
             rmse_tr[index] = np.mean(self.rmse_train[int(burnin):, index])
             rmsetr_std[index] = np.std(self.rmse_train[int(burnin):, index])
 
@@ -639,27 +639,29 @@ class MCMC:
 
         ax = plt.subplot(111)
         x = np.array(np.arange(burnin, self.samples))
-        plt.plot(x, self.rmse_target_train[burnin: ], '.' , label="train-rmse-target")
-        plt.plot(x, self.rmse_target_train_trf[burnin: ], '.' , label="train-rmse-target-transfer")
-        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-        leg.get_frame().set_alpha(0.5)
+        plt.plot(x, self.rmse_target_train[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.rmse_target_train_trf[burnin: ], '.' , label="transfer")
+        plt.legend()
+#        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=False, fancybox=False)
+#        leg.get_frame().set_alpha(0.5)
 #        plt.xticks(x)
         plt.xlabel('Samples')
-        plt.ylabel('RMSE')
-        plt.title(dataset+' RMSE plot')
+        plt.ylabel('RMSE') 
+        plt.title(dataset+' Train RMSE')
         plt.savefig(self.directory+'/results/rmse-'+dataset+'train-mcmc.png')
         plt.clf()
 
 
         ax = plt.subplot(111)
-        plt.plot(x, self.rmse_target_test[burnin: ], '.' , label="test-rmse-target")
-        plt.plot(x, self.rmse_target_test_trf[burnin: ], '.' , label="test-rmse-target-transfer")
-        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-        leg.get_frame().set_alpha(0.5)
+        plt.plot(x, self.rmse_target_test[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.rmse_target_test_trf[burnin: ], '.' , label="transfer")
+        plt.legend()
+#        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
+#        leg.get_frame().set_alpha(0.5)
 #        plt.xticks(x)
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
-        plt.title(dataset+' RMSE plot')
+        plt.title(dataset+' Test RMSE')
         plt.savefig(self.directory+'/results/rmse-'+dataset+'test-mcmc.png')
         plt.clf()
 # ------------------------------------------------------- Main --------------------------------------------------------
@@ -669,7 +671,7 @@ if __name__ == '__main__':
 
 
     input = 520
-    hidden = 45
+    hidden = 50
     output = 2
     topology = [input, hidden, output]
 
@@ -718,7 +720,7 @@ if __name__ == '__main__':
     burnin = 0.1 * numSamples
 
     try:
-        mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='building1/')  # declare class
+        mcmc_task = MCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIndoorData/building1')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
@@ -733,4 +735,4 @@ if __name__ == '__main__':
         curses.endwin()
 
     # Plot the accuracies and rmse
-    mcmc_task.plot_rmse('Wifi Loc Task Building 1')
+    mcmc_task.plot_rmse('Wifi Loc Building 2')

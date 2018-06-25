@@ -54,36 +54,37 @@ for index in range(len(building_id)):
 n_groups = len(building_id)
 fig, ax = plt.subplots()  
 index = np.arange(n_groups)
-bar_width = 0.15
+bar_width = 0.13
 opacity = 0.8
 capsize = 3
  
    
 plt.bar(index + float(bar_width)/2, train_rmse, bar_width,
                 alpha = opacity,
-                error_kw = dict(elinewidth=1, ecolor='g', capsize=capsize),
-                color = 'b',
+                error_kw = dict(elinewidth=1, ecolor='C5', capsize=capsize),
+                color = 'C0',
                 yerr = train_std,
                 label = 'train no-transfer')
 
 plt.bar(index + float(bar_width)/2 + bar_width, train_rmse_trf, bar_width,
                 alpha = opacity,
-                error_kw = dict(elinewidth=1, ecolor='g', capsize=capsize),
-                color = 'c',
+                error_kw = dict(elinewidth=1, ecolor='C5', capsize=capsize),
+                color = 'C2',
                 yerr = train_std_trf,
                 label = 'train full-transfer')
                 
+                
 plt.bar(index + float(bar_width)/2 + 2 * bar_width, test_rmse, bar_width,
                 alpha = opacity,
-                error_kw = dict(elinewidth=1, ecolor='g', capsize=capsize),
-                color = 'y',
+                error_kw = dict(elinewidth=1, ecolor='C5', capsize=capsize),
+                color = 'C1',
                 yerr = test_std,
                 label = 'test no-transfer')
 
-plt.bar(index + float(bar_width)/2 + 3 * bar_width, test_rmse_trf, bar_width,
+plt.bar(index + float(bar_width)/2 + 3 * bar_width , test_rmse_trf, bar_width,
                 alpha = opacity,
-                error_kw = dict(elinewidth=1, ecolor='g', capsize=capsize),
-                color = 'r',
+                error_kw = dict(elinewidth=1, ecolor='C5', capsize=capsize),
+                color = 'C3',
                 yerr = test_std_trf,
                 label = 'test full-transfer')    
             
