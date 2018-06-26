@@ -48,6 +48,7 @@ targetdata = data[sourcesize:, :]
 # print sourcedata.shape, targetdata.shape
 
 datadict = {'sourceData':sourcedata, 'targetData':targetdata}
+sizedict = {'sourceData':0.35, 'targetData':0.75}
 
 for file, data in datadict.items():
     building = {}
@@ -62,7 +63,7 @@ for file, data in datadict.items():
         print data.shape
         X = data[:, :-4]
         y = data[:, -4:]
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=sizedict[file], random_state=42)
         traindata = np.c_[X_train, y_train]
         testdata = np.c_[X_test, y_test]
         np.savetxt(file+str(building_id)+'train.csv', traindata, delimiter=',')

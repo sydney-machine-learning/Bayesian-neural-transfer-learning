@@ -170,7 +170,7 @@ class TransferLearningMCMC:
 
         # ----------------
 
-    def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse, source_index):
+    def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse, source_index, naccept_target_trf):
         stdscr.addstr(0, 0, "Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(sample_count, self.samples, elapsed[0], elapsed[1]))
         i = 2
         index = 0
@@ -186,7 +186,7 @@ class TransferLearningMCMC:
         i += 4
         stdscr.addstr(i, 3, "Target w/ transfer Progress:")
         stdscr.addstr(i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
-        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered RMSE: {:.4f} Source index: {}  ".format(last_transfer, last_transfer_rmse, source_index) )
+        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered RMSE: {:.4f} Source index: {} last accept: {} ".format(last_transfer, last_transfer_rmse, source_index, naccept_target_trf) )
 
         stdscr.refresh()
 
@@ -197,6 +197,7 @@ class TransferLearningMCMC:
         self.targetTop = self.topology.copy()
         self.targetTop[1] = int(1.0 * self.topology[1])
         self.target = Network(self.targetTop, self.targettraindata, self.targettestdata)
+#        print(self.sources[0].Top)
 
 
     def rmse(self, predictions, targets):
@@ -411,7 +412,7 @@ class TransferLearningMCMC:
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
-        quantum = int( 0.1 * samples )
+        quantum = int( 0.01 * samples )
 
         last_transfer  = 0
         last_transfer_rmse = 0
@@ -521,23 +522,27 @@ class TransferLearningMCMC:
                 if save_knowledge:
                     np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
                     np.savetxt(targettestrmsefile, [rmsetargettest_prev])
+            
+            w_prop = w_target_pro_trf.copy()
 
             if i != 0 and i % quantum == 0:
 #                self.transfersize = random.randint(1, self.wsize+1)
-#                sample_weights = self.transfer(w_proposal, w_target_pro_trf)
+#                sample_weights = self.transfer(w_proposal.copy(), w_target_pro_trf.copy())
                 sample_weights = np.vstack([w_proposal, w_target_pro_trf])
-                w_best_target, rmse_best, source_index = self.find_best(sample_weights, y_train_target)
+                w_best_target, rmse_best, source_index = self.find_best(sample_weights.copy(), y_train_target.copy())
                 if not np.array_equal(w_best_target, w_target_pro_trf):
-                   # print(" weights transfered \n")
-                   last_transfer = i
-                   last_transfer_rmse = rmse_best
+                    # print(" weights transfered \n")
+                    flag = True
+                    last_transfer = i
+                    last_transfer_rmse = rmse_best
+                w_prop = w_best_target.copy()
+                if not np.array_equal(w_best_target, w_prop):
+                    exit()
 
-                w_target_pro_trf = w_best_target
+            [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_prop, tau_pro_target_trf)
+            [likelihood_ignore_trf, pred_test_target_trf, rmse_test_target_trf] = self.likelihood_func(self.target, self.targettestdata, w_prop, tau_pro_target_trf)
 
-            [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_target_pro_trf, tau_pro_target_trf)
-            [likelihood_ignore_trf, pred_test_target_trf, rmse_test_target_trf] = self.likelihood_func(self.target, self.targettestdata, w_target_pro_trf, tau_pro_target_trf)
-
-            prior_target_prop_trf = self.log_prior(sigma_squared, nu_1, nu_2, w_target_pro_trf, tau_pro_target_trf)
+            prior_target_prop_trf = self.log_prior(sigma_squared, nu_1, nu_2, w_prop, tau_pro_target_trf)
 
             diff_likelihood_target_trf = likelihood_target_prop_trf - likelihood_target_trf
             diff_prior_target_trf = prior_target_prop_trf - prior_target_trf
@@ -548,12 +553,17 @@ class TransferLearningMCMC:
             u = random.uniform(0,1)
             # print mh_prob_target,u
             if u < mh_prob_target_trf:
-                naccept_target_trf += 1
+                # naccept_target_trf += 1
                 likelihood_target_trf = likelihood_target_prop_trf
                 prior_target_trf = prior_target_prop_trf
                 w_target_trf = w_target_pro_trf
                 eta_target_trf = eta_pro_target_trf
-
+                try:
+                    if not np.array_equal(w_prop, w_target_pro_trf):
+                        naccept_target_trf = i
+                except:
+                    pass
+                
                 if save_knowledge:
                     np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
                     np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
@@ -568,7 +578,7 @@ class TransferLearningMCMC:
                     np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
 
             elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index)
+            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, naccept_target_trf)
 
         stdscr.clear()
         stdscr.refresh()
@@ -703,39 +713,25 @@ if __name__ == '__main__':
     traindata = []
     testdata = []
 
-    # for building in building_id:
-    #     for floor in floor_id:
-    traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData1train.csv',
+    traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData2train.csv',
                                 delimiter=',')[:, :-2])
-    testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData1test.csv',
+    testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData2test.csv',
                                 delimiter=',')[:, :-2])
 
     stdscr = curses.initscr()
     curses.noecho()
     curses.cbreak()
 
-    # targettraindata1 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/20.csv', delimiter=',')[:, :-2]
-    # targettraindata2 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/21.csv', delimiter=',')[:, :-2]
-    # targettraindata3 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/22.csv', delimiter=',')[:, :-2]
-    # targettraindata4 = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/23.csv', delimiter=',')[:, :-2]
-    #
-    # targettraindata = np.vstack([targettraindata1, targettraindata2, targettraindata3, targettraindata4])
-
-    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData1train.csv', delimiter=',')[:, :-2]
-    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData1test.csv', delimiter=',')[:, :-2]
-
-
-    # y_train = traindata[:, input:]
-    # y_test = testdata[:, input:]
-    # y_target = targetdata[:, input:]
+    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData2train.csv', delimiter=',')[:, :-2]
+    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData2test.csv', delimiter=',')[:, :-2]
 
     random.seed(time.time())
 
-    numSamples = 2000# need to decide yourself
+    numSamples = 2500# need to decide yourself
     burnin = 0.1 * numSamples
 
     try:
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='building1')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='building2')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
@@ -751,4 +747,4 @@ if __name__ == '__main__':
         curses.endwin()
 
     # Plot the accuracies and rmse
-    mcmc_task.plot_rmse('Wifi Loc Building 2')
+    mcmc_task.plot_rmse('Wifi Loc Building 3')
