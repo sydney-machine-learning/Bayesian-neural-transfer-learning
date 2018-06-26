@@ -197,7 +197,6 @@ class TransferLearningMCMC:
         self.targetTop = self.topology.copy()
         self.targetTop[1] = int(1.0 * self.topology[1])
         self.target = Network(self.targetTop, self.targettraindata, self.targettestdata)
-#        print(self.sources[0].Top)
 
 
     def rmse(self, predictions, targets):
@@ -311,7 +310,7 @@ class TransferLearningMCMC:
         fxtest_samples = []
         for index in range(self.numSources):
             fxtrain_samples.append(np.ones((int(samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
-            fxtest_samples.append(np.ones((int(samples), int(testsize[index]), netw[2])))  # fx of test data over all samples
+            fxtest_samples.append(np.ones((int(samples), int(targettrainsize), netw[2])))  # fx of test data over all samples
 
         fxtarget_train_samples = np.ones((samples, targettrainsize, netw_target[2])) #fx of target train data over all samples
         fxtarget_test_samples = np.ones((samples, targettestsize, netw_target[2])) #fx of target test data over all samples
@@ -360,7 +359,7 @@ class TransferLearningMCMC:
         for index in range(self.numSources):
             prior[index] = self.log_prior(sigma_squared, nu_1, nu_2, w[index], tau_pro[index])  # takes care of the gradients
             [likelihood[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index], tau_pro[index])
-            [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w[index], tau_pro[index])
+            [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w[index], tau_pro[index])
 
         prior_target = self.log_prior(sigma_squared, nu_1, nu_2, w_target, tau_pro_target)
         [likelihood_target, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target, tau_pro_target)
@@ -436,7 +435,7 @@ class TransferLearningMCMC:
 
             for index in range(self.numSources):
                 [likelihood_proposal[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w_proposal[index], tau_pro[index])
-                [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.testdata[index], w_proposal[index], tau_pro[index])
+                [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w_proposal[index], tau_pro[index])
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
             for index in range(self.numSources):
@@ -660,7 +659,7 @@ class TransferLearningMCMC:
         if not os.path.isdir(self.directory+'/results'):
             os.mkdir(self.directory+'/results')
 
-        burnin = int(0.1 * self.samples)
+        burnin = int(0 * self.samples)
 
         ax = plt.subplot(111)
         x = np.array(np.arange(burnin, self.samples))
@@ -695,9 +694,9 @@ if __name__ == '__main__':
 
 
 
-    input = 520
-    hidden = 45
-    output = 2
+    input = 4
+    hidden = 10
+    output = 1
     topology = [input, hidden, output]
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
@@ -708,22 +707,22 @@ if __name__ == '__main__':
     #--------------------------------------------- Train for the source task -------------------------------------------
 
     numSources = 1
-    building_id = [0, 1, 2]
-    floor_id  = [0, 1, 2, 3]
+#    building_id = [0, 1, 2]
+#    floor_id  = [0, 1, 2, 3]
     traindata = []
     testdata = []
 
-    traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData2train.csv',
-                                delimiter=',')[:, :-2])
-    testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData2test.csv',
-                                delimiter=',')[:, :-2])
+    traindata.append(np.genfromtxt('../../datasets/synthetic_data/source.csv',
+                                delimiter=','))
+    testdata.append(np.genfromtxt('../../datasets/synthetic_data/source.csv',
+                                delimiter=','))
 
     stdscr = curses.initscr()
     curses.noecho()
     curses.cbreak()
 
-    targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData2train.csv', delimiter=',')[:, :-2]
-    targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData2test.csv', delimiter=',')[:, :-2]
+    targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+    targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
 
     random.seed(time.time())
 
@@ -731,14 +730,14 @@ if __name__ == '__main__':
     burnin = 0.1 * numSamples
 
     try:
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='building2')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
     # start sampling
-        fx_train, fx_test, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
+        fx_train, _, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
         # display train and test accuracies
         mcmc_task.display_rmse()
     finally:
@@ -747,4 +746,4 @@ if __name__ == '__main__':
         curses.endwin()
 
     # Plot the accuracies and rmse
-    mcmc_task.plot_rmse('Wifi Loc Building 3')
+    mcmc_task.plot_rmse('synthetic_data')
