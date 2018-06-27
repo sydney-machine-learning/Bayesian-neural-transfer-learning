@@ -201,6 +201,9 @@ class TransferLearningMCMC:
 
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
+        
+#    def rmse(self, predictions, targets):
+#        return np.sum((targets- predictions) ** 2)/np.sum((targets - np.mean(targets)))
 
     def likelihood_func(self, neuralnet, data, w, tausq):
         y = data[:, self.topology[0]:]
@@ -651,7 +654,6 @@ class TransferLearningMCMC:
         stdscr.addstr(14, 4, "Mean: " + str(rmse_target_train_trf) + " Std: " + str(rmsetarget_std_train_trf))
         stdscr.addstr(16, 0, "Target Test rmse w/ transfer:")
         stdscr.addstr(17, 4, "Mean: " + str(rmse_target_test_trf) + " Std: " + str(rmsetarget_std_test_trf))
-        stdscr.getkey()
         stdscr.refresh()
 
 
@@ -695,7 +697,7 @@ if __name__ == '__main__':
 
 
     input = 4
-    hidden = 10
+    hidden = 15
     output = 1
     topology = [input, hidden, output]
 
@@ -711,39 +713,44 @@ if __name__ == '__main__':
 #    floor_id  = [0, 1, 2, 3]
     traindata = []
     testdata = []
-
-    traindata.append(np.genfromtxt('../../datasets/synthetic_data/source.csv',
-                                delimiter=','))
-    testdata.append(np.genfromtxt('../../datasets/synthetic_data/source.csv',
-                                delimiter=','))
-
+    
     stdscr = curses.initscr()
     curses.noecho()
     curses.cbreak()
 
-    targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-    targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
-
-    random.seed(time.time())
-
-    numSamples = 2500# need to decide yourself
-    burnin = 0.1 * numSamples
-
     try:
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data')  # declare class
+    
+        targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+            
+        for index in range(7,8):
+            stdscr.clear()
+            traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(index + 1)+'.csv',
+                                        delimiter=','))
+            testdata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(index + 1)+'.csv',
+                                        delimiter=','))
 
-        # generate random weights
-        w_random = np.random.randn(mcmc_task.wsize)
-        w_random_target = np.random.randn(mcmc_task.wsize_target)
+            random.seed(time.time())
 
-    # start sampling
-        fx_train, _, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
-        # display train and test accuracies
-        mcmc_task.display_rmse()
+            numSamples = 4000# need to decide yourself
+
+
+            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data '+str(index+1))  # declare class
+
+            # generate random weights
+            w_random = np.random.randn(mcmc_task.wsize)
+            w_random_target = np.random.randn(mcmc_task.wsize_target)
+
+            # start sampling
+            fx_train, _, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
+            # display train and test accuracies
+            mcmc_task.display_rmse()
+
+
+            # Plot the accuracies and rmse
+            mcmc_task.plot_rmse('synthetic_data_'+str(index + 1))
+        
     finally:
-        curses.echo()
+        curses.echo()   
         curses.nocbreak()
         curses.endwin()
-
-    # Plot the accuracies and rmse
-    mcmc_task.plot_rmse('synthetic_data')
