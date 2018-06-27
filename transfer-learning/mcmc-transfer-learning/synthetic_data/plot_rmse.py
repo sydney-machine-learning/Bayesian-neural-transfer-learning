@@ -18,8 +18,8 @@ test_std = np.zeros((len(source_index)))
 
 for index in source_index:
 
-    rmsetrain_trf = np.genfromtxt('synthetic_data '+str(index)+'/targettrftrainrmse.csv')
-    rmsetest_trf = np.genfromtxt('synthetic_data '+str(index)+'/targettrftestrmse.csv')
+    rmsetrain_trf = np.genfromtxt('./Old/synthetic_data '+str(index)+'/targettrftrainrmse.csv')
+    rmsetest_trf = np.genfromtxt('./Old/synthetic_data '+str(index)+'/targettrftestrmse.csv')
 
     burnin = int(0.1 * rmsetrain_trf.shape[0])
     stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
@@ -34,8 +34,8 @@ for index in source_index:
     test_std_trf[index-1] = stdtest_trf
 
     # rmse and std for w/o transfer results
-    rmsetrain = np.genfromtxt('synthetic_data '+str(index)+'/targettrainrmse.csv')
-    rmsetest = np.genfromtxt('synthetic_data '+str(index)+'/targettestrmse.csv')
+    rmsetrain = np.genfromtxt('./Old/synthetic_data '+str(index)+'/targettrainrmse.csv')
+    rmsetest = np.genfromtxt('./Old/synthetic_data '+str(index)+'/targettestrmse.csv')
     burnin = int(0.1 * rmsetrain.shape[0])
     stdtrain = rmsetrain[burnin: ].std(axis=0)
     stdtest = rmsetest[burnin: ].std(axis=0)
@@ -86,7 +86,7 @@ plt.bar(index + float(bar_width)/2 + 3 * bar_width , test_rmse_trf, bar_width,
 
 plt.title('Synthetic Data RMSE')
 plt.xlabel('datasets')
-plt.ylabel('RMSE')
+plt.ylabel('NMSE')
 plt.xticks(index+2*bar_width, source_index, rotation=0)
 plt.legend()
 

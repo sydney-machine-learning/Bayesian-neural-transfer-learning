@@ -176,17 +176,17 @@ class TransferLearningMCMC:
         index = 0
         for index in range(0, self.numSources):
             stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index + 1))
-            stdscr.addstr(index + i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmsetrain[index], rmsetest[index]))
+            stdscr.addstr(index + i + 1, 5, "Train NMSE: {:.4f}  Test NMSE: {:.4f}".format(rmsetrain[index], rmsetest[index]))
             i += 2
 
         i = index + i + 2
         stdscr.addstr(i, 3, "Target w/o transfer Progress:")
-        stdscr.addstr(i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target, rmse_test_target))
+        stdscr.addstr(i + 1, 5, "Train NMSE: {:.4f}  Test NMSE: {:.4f}".format(rmse_train_target, rmse_test_target))
 
         i += 4
         stdscr.addstr(i, 3, "Target w/ transfer Progress:")
-        stdscr.addstr(i + 1, 5, "Train RMSE: {:.4f}  Test RMSE: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
-        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered RMSE: {:.4f} Source index: {} last accept: {} ".format(last_transfer, last_transfer_rmse, source_index, naccept_target_trf) )
+        stdscr.addstr(i + 1, 5, "Train NMSE: {:.4f}  Test NMSE: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
+        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered NMSE: {:.4f} Source index: {} last accept: {} ".format(last_transfer, last_transfer_rmse, source_index, naccept_target_trf) )
 
         stdscr.refresh()
 
@@ -202,13 +202,13 @@ class TransferLearningMCMC:
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
         
-#    def rmse(self, predictions, targets):
-#        return np.sum((targets- predictions) ** 2)/np.sum((targets - np.mean(targets)))
+    def nmse(self, predictions, targets):
+        return np.sum((targets - predictions) ** 2)/np.sum((targets - np.mean(targets)) ** 2)
 
     def likelihood_func(self, neuralnet, data, w, tausq):
         y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
-        rmse = self.rmse(fx, y)
+        rmse = self.nmse(fx, y)
         loss = -0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq
         return [np.sum(loss), fx, rmse]
 
@@ -261,7 +261,7 @@ class TransferLearningMCMC:
         best_rmse = 999.9
         for index in range(weights.shape[0]):
             fx = self.target.evaluate_proposal(self.targettraindata, weights[index])
-            rmse = self.rmse(fx, y)
+            rmse = self.nmse(fx, y)
             if rmse < best_rmse:
                 best_rmse = rmse
                 best_w = weights[index]
@@ -723,7 +723,7 @@ if __name__ == '__main__':
         targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
         targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
             
-        for index in range(7,8):
+        for index in range(10):
             stdscr.clear()
             traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(index + 1)+'.csv',
                                         delimiter=','))
