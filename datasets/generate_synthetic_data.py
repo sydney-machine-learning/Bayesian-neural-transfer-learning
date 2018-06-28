@@ -25,7 +25,8 @@ y = []
 
 
 # Generate the sources with different delta values
-for delta in np.arange(0, 2, 0.2):
+for delta in np.random.uniform(-0.5, 0.5, 5):
+    print delta
     num_sources += 1
     x_source = np.abs(np.random.uniform(0, 1, source_size * input).reshape((source_size,input)))
     w_source = w_target + delta * np.random.randn(w_target.shape[0], w_target.shape[1])

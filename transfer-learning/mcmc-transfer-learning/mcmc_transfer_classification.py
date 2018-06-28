@@ -153,8 +153,27 @@ class MCMC:
         self.topology = topology  # max epocs
         self.traindata = traindata  #
         self.testdata = testdata
+        self.targettraindata = targettraindata
+        self.targettestdata = targettestdata
+        self.numSources = sources
+
+        # Create file objects to write the attributes of the samples
+        self.directory = directory
         self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
-        # ----------------
+        self.createNetworks()
+        self.wsize_target = (self.targetTop[0] * self.targetTop[1]) + (self.targetTop[1] * self.targetTop[2]) + self.targetTop[1] + self.targetTop[2]
+        if not os.path.isdir(self.directory):
+            os.mkdir(self.directory)
+
+# ----------------
+
+    def createNetworks(self):
+        self.sources = []
+        for index in range(self.numSources):
+            self.sources.append(Network(self.topology, self.traindata[index], self.testdata[index]))
+        self.targetTop = self.topology.copy()
+        self.targetTop[1] = int(1.0 * self.topology[1])
+        self.target = Network(self.targetTop, self.targettraindata, self.targettestdata)
 
     def softmax(self, fx):
         ex = np.exp(fx)
@@ -184,7 +203,18 @@ class MCMC:
             if out[i] == y_out[i]:
                 count += 1
         acc = float(count)/y_out.shape[0] * 100
-        return [loss, fx, rmse, acc]
+        return [loss, rmse, acc]
+
+    def find_best(self, weights, y):
+        best_rmse = 999.9
+        for index in range(weights.shape[0]):
+            fx = self.target.evaluate_proposal(self.targettraindata, weights[index])
+            rmse = self.nmse(fx, y)
+            if rmse < best_rmse:
+                best_rmse = rmse
+                best_w = weights[index]
+                best_index = index
+        return best_w, best_rmse, best_index + 1
 
 
     def log_prior(self, sigma_squared, w):
@@ -222,38 +252,55 @@ class MCMC:
         return self.genweights(w_mean, w_std)
 
 
-    def sampler(self, w_pretrain, directory, transfer=False):
+    def sampler(self, w_pretrain, w_pretrain_target, stdscr, save_knowledge=False):
 
         # Create file objects to write the attributes of the samples
-        self.directory = directory
-        if not os.path.isdir(self.directory):
-            os.mkdir(self.directory)
+        trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
+        testrmsefile = open(self.directory+'/testrmse.csv', 'w')
+
+        targettrainrmsefile = open(self.directory+'/targettrainrmse.csv', 'w')
+        targettestrmsefile = open(self.directory+'/targettestrmse.csv', 'w')
+
+        targettrftrainrmsefile = open(self.directory+'/targettrftrainrmse.csv', 'w')
+        targettrftestrmsefile = open(self.directory+'/targettrftestrmse.csv', 'w')
 
         trainaccfile = open(self.directory+'/trainacc.csv', 'w')
         testaccfile = open(self.directory+'/testacc.csv', 'w')
 
-        trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
-        testrmsefile = open(self.directory+'/testrmse.csv', 'w')
+        targettrainaccfile = open(self.directory+'/targettrainacc.csv', 'w')
+        targettestaccfile = open(self.directory+'/targettestacc.csv', 'w')
+
+        targettrftrainaccfile = open(self.directory+'/targettrftrainacc.csv', 'w')
+        targettrftestaccfile = open(self.directory+'/targettrftestacc.csv', 'w')
 
 
         # ------------------- initialize MCMC
 
         start = time.time()
-        testsize = self.testdata.shape[0]
-        trainsize = self.traindata.shape[0]
+        trainsize = np.zeros((self.numSources))
+        testsize = np.zeros((self.numSources))
+        for index in range(self.numSources):
+            trainsize[index] = self.traindata[index].shape[0]
+            testsize[index] = self.testdata[index].shape[0]
+
+        targettrainsize = self.targettraindata.shape[0]
+        targettestsize = self.targettestdata.shape[0]
+
         samples = self.samples
 
-        x_test = np.linspace(0, 1, num=testsize)
-        x_train = np.linspace(0, 1, num=trainsize)
-
-
-
+        y_train = []
+        y_test = []
         netw = self.topology  # [input, hidden, output]
-        y_test = self.testdata[:, netw[0]:]
-        y_train = self.traindata[:, netw[0]:]
+        netw_target = self.targetTop
+        for index in range(self.numSources):
+            y_test.append(self.testdata[index][:, netw[0]:])
+            y_train.append(self.traindata[index][:, netw[0]:])
 
-        pos_w = np.ones((self.wsize, ))  # posterior of all weights and bias over all samples
+        y_test_target = self.targettestdata[:, netw[0]:]
+        y_train_target = self.targettraindata[:, netw[0]:]
 
+        pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
+        # self.transfersize = netw[0] * netw[1]
 
         w = w_pretrain
 
@@ -262,117 +309,295 @@ class MCMC:
         step_w = 0.02  # defines how much variation you need in changes to w
 
         # --------------------- Declare FNN and initialize
+        w = np.zeros((self.numSources, self.wsize))
+        w_proposal = np.zeros((self.numSources, self.wsize))
+        for index in range(self.numSources):
+            w[index] = w_pretrain
+            w_proposal[index] = w_pretrain
 
-        neuralnet = Network(self.topology, self.traindata, self.testdata)
+        w_target = w_pretrain_target
+        w_target_pro = w_pretrain_target
 
-        pred_train = neuralnet.evaluate_proposal(self.traindata, w)
-        pred_test = neuralnet.evaluate_proposal(self.testdata, w)
-
-
+        step_w = 0.02  # defines how much variation you need in changes to w
+        step_eta = 0.01
         sigma_squared = 25
 
-        prior = self.log_prior(sigma_squared, w)  # takes care of the gradients
+        pred_train = []
+        pred_test = []
 
-        [likelihood, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w)
-        [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w)
-
-
-
-
-        if transfer:
-            np.reshape(w_proposal, (1, w_proposal.shape[0]))
-            with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
-
-        np.savetxt(trainaccfile, [trainacc])
-        np.savetxt(testaccfile, [testacc])
-        np.savetxt(trainrmsefile, [rmsetrain])
-        np.savetxt(testrmsefile, [rmsetest])
+        for index in range(self.numSources):
+            pred_train.append(self.sources[index].evaluate_proposal(self.traindata[index], w[index]))
+            pred_test.append(self.sources[index].evaluate_proposal(self.testdata[index], w[index]))
+            # eta[index] = np.log(np.var(pred_train[index] - y_train[index]))
+            # tau_pro[index] = np.exp(eta[index])
 
 
-        trainacc_prev = trainacc
-        testacc_prev = testacc
-        rmsetest_prev = rmsetest
+        pred_train_target = self.target.evaluate_proposal(self.targettraindata, w_target)
+        pred_test_target = self.target.evaluate_proposal(self.targettestdata, w_target)
+
+        # eta_target = np.log(np.var(pred_train_target - y_train_target))
+        # tau_pro_target = np.exp(eta_target)
+
+        prior = np.zeros((self.numSources))
+        likelihood = np.zeros((self.numSources))
+        likelihood_proposal = np.zeros((self.numSources))
+
+        rmsetrain = np.zeros((self.numSources))
+        rmsetest = np.zeros((self.numSources))
+        acctrain = np.zeros((self.numSources))
+        acctest = np.zeros((self.numSources))
+
+
+        for index in range(self.numSources):
+            prior[index] = self.log_prior(sigma_squared, w[index])  # takes care of the gradients
+            [likelihood[index], rmsetrain[index], acctrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index])
+            [likelihood_ignore, rmsetest[index], acctest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w[index])
+
+        prior_target = self.log_prior(sigma_squared, w_target)
+        [likelihood_target, rmse_train_target, acc_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target)
+        [likelihood_ignore, rmse_test_target, acc_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target)
+
+        rmsetrain_sample = np.zeros(rmsetrain.shape)
+        rmsetest_sample = np.zeros(rmsetest.shape)
+        acctrain_sample = np.zeros(acctrain.shape)
+        acctest_sample = np.zeros(acctest.shape)
+
+
+
+        w_target_trf = w_target
+
+        likelihood_target_trf = likelihood_target
+        pred_train_target_trf = pred_train_target
+        pred_test_target_trf = pred_test_target
+        rmse_train_target_trf = rmse_train_target
+        rmse_test_target_trf = rmse_test_target
+        acc_train_target_trf = acc_train_target
+        acc_test_target_trf = acc_test_target
+
+        prior_target_trf = prior_target
+
+
+        for index in range(self.numSources):
+            rmsetrain_sample[index] = rmsetrain[index]
+            rmsetest_sample[index] = rmsetest[index]
+            acctrain_sample[index] = acctrain[index]
+            acctest_sample[index] = acctest[index]
+
+
+
         rmsetrain_prev = rmsetrain
-        wpro_prev = w_proposal
+        rmsetest_prev = rmsetest
+        acctrain_prev = acctrain
+        acctest_prev = acctest
 
-        naccept = 0
+        # save the information
+        np.savetxt(trainrmsefile, [rmsetrain_sample])
+        np.savetxt(testrmsefile, [rmsetest_sample])
+        np.savetxt(trainaccfile, [acctrain_sample])
+        np.savetxt(testaccfile, [acctest_sample])
+
+        np.savetxt(targettrainrmsefile, [rmse_train_target])
+        np.savetxt(targettestrmsefile, [rmse_test_target])
+        np.savetxt(targettrainaccfile, [acc_train_target])
+        np.savetxt(targettestaccfile, [acc_test_target])
+
+        # save values into previous variables
+        rmsetargettrain_prev = rmse_train_target
+        rmsetargettest_prev = rmse_test_target
+        acctargettrain_prev = acc_train_target
+        acctargettest_prev = acc_test_target
+
+
+        np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
+        np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
+        np.savetxt(targettrftrainaccfile, [acc_train_target_trf])
+        np.savetxt(targettrftestaccfile, [acc_test_target_trf])
+
+        # save values into previous variables
+        rmsetargettrftrain_prev = rmse_train_target_trf
+        rmsetargettrftest_prev = rmse_test_target_trf
+        acctargettrftrain_prev = acc_train_target_trf
+        acctargettrftest_prev = acc_test_target_trf
+
+        naccept = np.zeros((self.numSources))
+        naccept_target = 0
+        naccept_target_trf = 0
+        # print 'begin sampling using mcmc random walk'
+
+        prior_prop = np.zeros((self.numSources))
+        quantum = int( 0.01 * samples )
+
+        last_transfer  = 0
+        last_transfer_rmse = 0
+        source_index = None
         # print 'begin sampling using mcmc random walk'
 
         for i in range(samples - 1):
 
             w_proposal = w + np.random.normal(0, step_w, self.wsize)
+            w_target_pro = w_target + np.random.normal(0, step_w, self.wsize_target)
+            w_target_pro_trf = w_target_trf + np.random.normal(0, step_w, self.wsize_target)
 
-            [likelihood_proposal, pred_train, rmsetrain, trainacc] = self.likelihood_func(neuralnet, self.traindata, w_proposal)
-            [likelihood_ignore, pred_test, rmsetest, testacc] = self.likelihood_func(neuralnet, self.testdata, w_proposal)
+            for index in range(self.numSources):
+                [likelihood_proposal[index], rmsetrain[index], acctrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w_proposal[index])
+                [likelihood_ignore, rmsetest[index], acctest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w_proposal[index])
 
             # likelihood_ignore  refers to parameter that will not be used in the alg.
+            for index in range(self.numSources):
+                prior_prop[index] = self.log_prior(sigma_squared, w_proposal[index])  # takes care of the gradients
 
-            prior_prop = self.log_prior(sigma_squared, w_proposal)  # takes care of the gradients
+            [likelihood_target_prop, rmse_train_target, acc_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro)
+            [likelihood_ignore, rmse_test_target, acc_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target_pro)
 
-            diff_likelihood = likelihood_proposal - likelihood
-            diff_prior = prior_prop - prior
+            prior_target_prop = self.log_prior(sigma_squared, w_target_pro)
 
-            mh_prob = min(1, math.exp(diff_likelihood + diff_prior))
+            diff_likelihood_target = likelihood_target_prop - likelihood_target
+            diff_prior_target = prior_target_prop - prior_target
+            diff_target = min(700, diff_likelihood_target + diff_prior_target)
+            mh_prob_target = min(1, math.exp(diff_target))
 
             u = random.uniform(0, 1)
+            for index in range(self.numSources):
+                if u < mh_prob[index]:
+                    # Update position
+                    naccept[index] += 1
+                    likelihood[index] = likelihood_proposal[index]
+                    prior[index] = prior_prop[index]
+                    w[index] = w_proposal[index]
 
-            if u < mh_prob:
-                # Update position
-                naccept += 1
-                likelihood = likelihood_proposal
-                prior = prior_prop
-                w = w_proposal
+                    # print i, trainacc, rmsetrain
+                    elapsed = convert_time(time.time() - start)
 
-                # print i, trainacc, rmsetrain
+                    rmsetrain_sample[index] = rmsetrain[index]
+                    rmsetest_sample[index] = rmsetest[index]
+                    acctrain_sample[index] = acctest[index]
+                    acctest_sample[index] = acctest[index]
+
+                    rmsetrain_prev[index] = rmsetrain[index]
+                    rmsetest_prev[index] = rmsetest[index]
+                    acctrain_prev[index] = acctrain[index]
+                    acctest_prev[index] = acctest[index]
+
+
+                else:
+                    rmsetrain_sample[index] = rmsetrain_prev[index]
+                    rmsetest_sample[index] = rmsetest_prev[index]
+                    acctrain_sample[index] = acctrain_prev[index]
+                    acctest_sample[index] = acctest_prev[index]
+
+            np.savetxt(trainrmsefile, [rmsetrain_sample])
+            np.savetxt(testrmsefile, [rmsetest_sample])
+            np.savetxt(trainaccfile, [acctrain_sample])
+            np.savetxt(testaccfile, [acctest_sample])
+
+            u = random.uniform(0,1)
+            # print mh_prob_target,u
+            if u < mh_prob_target:
+                # print "hello"
+                naccept_target += 1
+                likelihood_target = likelihood_target_prop
+                prior_target = prior_target_prop
+                w_target = w_target_pro
+
                 elapsed = convert_time(time.time() - start)
-                sys.stdout.write(
-                    '\rSamples: ' + str(i + 2) + "/" + str(samples)
-                    + "\tTrain accuracy: " + str(trainacc)
-                    + " Train RMSE: "+ str(rmsetrain)
-                    + "\tTest accuracy: " + str(testacc)
-                    + " Test RMSE: " + str(rmsetest)
-                    + "\tTime elapsed: " + str(elapsed[0]) + ":" + str(elapsed[1]) )
-                # print ""
+                if save_knowledge:
+                    np.savetxt(targettrainrmsefile, [rmse_train_target])
+                    np.savetxt(targettestrmsefile, [rmse_test_target])
+                    np.savetxt(targettrainaccfile, [acc_train_target])
+                    np.savetxt(targettestaccfile, [acc_test_target])
 
-                # save arrays to file
-                if transfer:
-                    np.reshape(w_proposal, (1, w_proposal.shape[0]))
-                    with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                        np.savetxt(wprofile, [w_proposal], delimiter=',', fmt='%.5f')
+                    # save values into previous variables
+                    rmsetargettrain_prev = rmse_train_target
+                    rmsetargettest_prev = rmse_test_target
+                    acctargettrain_prev = acc_train_target
+                    acctargettest_prev = acc_test_target
 
-                np.savetxt(trainaccfile, [trainacc])
-                np.savetxt(testaccfile, [testacc])
-                np.savetxt(trainrmsefile, [rmsetrain])
-                np.savetxt(testrmsefile, [rmsetest])
-
-                #save values into previous variables
-                wpro_prev = w_proposal
-                trainacc_prev = trainacc
-                testacc_prev = testacc
-                rmsetrain_prev = rmsetrain
-                rmsetest_prev = rmsetest
 
             else:
-                if transfer:
-                    np.reshape(wpro_prev, (1, wpro_prev.shape[0]))
-                    with open(self.directory+'/wprop.csv', 'w') as wprofile:
-                        np.savetxt(wprofile, [wpro_prev], delimiter=',', fmt='%.5f')
-                np.savetxt(trainaccfile, [trainacc_prev])
-                np.savetxt(testaccfile, [testacc_prev])
-                np.savetxt(trainrmsefile, [rmsetrain_prev])
-                np.savetxt(testrmsefile, [rmsetest_prev])
+                if save_knowledge:
+                    np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
+                    np.savetxt(targettestrmsefile, [rmsetargettest_prev])
+                    np.savetxt(targettrainaccfile, [acctargettrain_prev])
+                    np.savetxt(targettestaccfile, [acctargettest_prev])
 
-        print naccept / float(samples) * 100.0, '% was accepted'
+            w_prop = w_target_pro_trf.copy()
+
+            if i != 0 and i % quantum == 0:
+                # self.transfersize = random.randint(1, self.wsize+1)
+                # sample_weights = self.transfer(w_proposal.copy(), w_target_pro_trf.copy())
+                # sample_weights = np.vstack([w_proposal, w_target_pro_trf])
+                w_best_target, rmse_best, source_index = self.find_best(w_proposal.copy(), y_train_target.copy())
+                if not np.array_equal(w_best_target, w_target_pro_trf):
+                    # print(" weights transfered \n")
+                    flag = True
+                    last_transfer = i
+                    last_transfer_rmse = rmse_best
+                w_prop = w_best_target.copy()
+                if not np.array_equal(w_best_target, w_prop):
+                    exit()
+
+            [likelihood_target_prop_trf, rmse_train_target_trf, acc_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_prop)
+            [likelihood_ignore_trf, rmse_test_target_trf, acc_test_target_trf] = self.likelihood_func(self.target, self.targettestdata, w_prop)
+
+            prior_target_prop_trf = self.log_prior(sigma_squared, w_prop, tau_pro_target_trf)
+
+            diff_likelihood_target_trf = likelihood_target_prop_trf - likelihood_target_trf
+            diff_prior_target_trf = prior_target_prop_trf - prior_target_trf
+            diff_target_trf = min(700, diff_likelihood_target_trf + diff_prior_target_trf)
+            mh_prob_target_trf = min(1, math.exp(diff_target_trf))
+
+
+            u = random.uniform(0,1)
+            # print mh_prob_target,u
+            if u < mh_prob_target_trf:
+                # naccept_target_trf += 1
+                likelihood_target_trf = likelihood_target_prop_trf
+                prior_target_trf = prior_target_prop_trf
+                w_target_trf = w_target_pro_trf
+                try:
+                    if not np.array_equal(w_prop, w_target_pro_trf):
+                        naccept_target_trf = i
+                except:
+                    pass
+
+                if save_knowledge:
+                    np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
+                    np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
+                    np.savetxt(targettrftrainaccfile, [acc_train_target_trf])
+                    np.savetxt(targettrftestaccfile, [acc_test_target_trf])
+
+                    # save values into previous variables
+                    rmsetargettrftrain_prev = rmse_train_target_trf
+                    rmsetargettrftest_prev = rmse_test_target_trf
+                    acctargettrftrain_prev = acc_train_target_trf
+                    acctargettrftest_prev = acc_test_target_trf
+
+            else:
+                if save_knowledge:
+                    np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
+                    np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
+                    np.savetxt(targettrftrainaccfile, [acctargettrftrain_prev])
+                    np.savetxt(targettrftestaccfile, [acctargettrftest_prev])
+
+            elapsed = convert_time(time.time() - start)
+            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, naccept_target_trf)
+
+        stdscr.clear()
+        stdscr.refresh()
+        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted".format(naccept / float(samples) * 100.0))
+
         accept_ratio = naccept / (samples * 1.0) * 100
 
         # Close the files
-        trainaccfile.close()
-        testaccfile.close()
         trainrmsefile.close()
         testrmsefile.close()
+        targettrainrmsefile.close()
+        targettestrmsefile.close()
+        targettrftrainrmsefile.close()
+        targettrftestrmsefile.close()
 
-        return (x_train, x_test, accept_ratio)
+        return (accept_ratio)
+
 
     def get_acc(self):
         self.train_acc = np.genfromtxt(self.directory+'/trainacc.csv')

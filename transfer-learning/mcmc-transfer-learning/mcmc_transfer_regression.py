@@ -201,7 +201,7 @@ class TransferLearningMCMC:
 
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
-        
+
     def nmse(self, predictions, targets):
         return np.sum((targets - predictions) ** 2)/np.sum((targets - np.mean(targets)) ** 2)
 
@@ -272,6 +272,7 @@ class TransferLearningMCMC:
 
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
+
         targettrainrmsefile = open(self.directory+'/targettrainrmse.csv', 'w')
         targettestrmsefile = open(self.directory+'/targettestrmse.csv', 'w')
 
@@ -524,14 +525,14 @@ class TransferLearningMCMC:
                 if save_knowledge:
                     np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
                     np.savetxt(targettestrmsefile, [rmsetargettest_prev])
-            
+
             w_prop = w_target_pro_trf.copy()
 
             if i != 0 and i % quantum == 0:
-#                self.transfersize = random.randint(1, self.wsize+1)
-#                sample_weights = self.transfer(w_proposal.copy(), w_target_pro_trf.copy())
-                sample_weights = np.vstack([w_proposal, w_target_pro_trf])
-                w_best_target, rmse_best, source_index = self.find_best(sample_weights.copy(), y_train_target.copy())
+                # self.transfersize = random.randint(1, self.wsize+1)
+                # sample_weights = self.transfer(w_proposal.copy(), w_target_pro_trf.copy())
+                # sample_weights = np.vstack([w_proposal, w_target_pro_trf])
+                w_best_target, rmse_best, source_index = self.find_best(w_proposal.copy(), y_train_target.copy())
                 if not np.array_equal(w_best_target, w_target_pro_trf):
                     # print(" weights transfered \n")
                     flag = True
@@ -565,7 +566,7 @@ class TransferLearningMCMC:
                         naccept_target_trf = i
                 except:
                     pass
-                
+
                 if save_knowledge:
                     np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
                     np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
@@ -661,7 +662,7 @@ class TransferLearningMCMC:
         if not os.path.isdir(self.directory+'/results'):
             os.mkdir(self.directory+'/results')
 
-        burnin = int(0 * self.samples)
+        burnin = int(0.1 * self.samples)
 
         ax = plt.subplot(111)
         x = np.array(np.arange(burnin, self.samples))
@@ -708,49 +709,48 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 1
+    numSources = 5
 #    building_id = [0, 1, 2]
 #    floor_id  = [0, 1, 2, 3]
-    traindata = []
-    testdata = []
-    
+
     stdscr = curses.initscr()
     curses.noecho()
     curses.cbreak()
 
     try:
-    
+
         targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
         targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
-            
-        for index in range(10):
-            stdscr.clear()
+        traindata = []
+        testdata = []
+        for index in range(numSources):
             traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(index + 1)+'.csv',
                                         delimiter=','))
             testdata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(index + 1)+'.csv',
                                         delimiter=','))
 
-            random.seed(time.time())
+        stdscr.clear()
+        random.seed(time.time())
 
-            numSamples = 4000# need to decide yourself
-
-
-            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data '+str(index+1))  # declare class
-
-            # generate random weights
-            w_random = np.random.randn(mcmc_task.wsize)
-            w_random_target = np.random.randn(mcmc_task.wsize_target)
-
-            # start sampling
-            fx_train, _, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
-            # display train and test accuracies
-            mcmc_task.display_rmse()
+        numSamples = 4000# need to decide yourself
 
 
-            # Plot the accuracies and rmse
-            mcmc_task.plot_rmse('synthetic_data_'+str(index + 1))
-        
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data')  # declare class
+
+        # generate random weights
+        w_random = np.random.randn(mcmc_task.wsize)
+        w_random_target = np.random.randn(mcmc_task.wsize_target)
+
+        # start sampling
+        fx_train, _, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
+        # display train and test accuracies
+        mcmc_task.display_rmse()
+
+
+        # Plot the accuracies and rmse
+        mcmc_task.plot_rmse('synthetic_data')
+
     finally:
-        curses.echo()   
+        curses.echo()
         curses.nocbreak()
         curses.endwin()
