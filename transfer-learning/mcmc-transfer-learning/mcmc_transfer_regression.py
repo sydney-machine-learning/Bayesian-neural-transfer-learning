@@ -176,17 +176,17 @@ class TransferLearningMCMC:
         index = 0
         for index in range(0, self.numSources):
             stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index + 1))
-            stdscr.addstr(index + i + 1, 5, "Train NMSE: {:.4f}  Test NMSE: {:.4f}".format(rmsetrain[index], rmsetest[index]))
+            stdscr.addstr(index + i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmsetrain[index], rmsetest[index]))
             i += 2
 
         i = index + i + 2
         stdscr.addstr(i, 3, "Target w/o transfer Progress:")
-        stdscr.addstr(i + 1, 5, "Train NMSE: {:.4f}  Test NMSE: {:.4f}".format(rmse_train_target, rmse_test_target))
+        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target, rmse_test_target))
 
         i += 4
         stdscr.addstr(i, 3, "Target w/ transfer Progress:")
-        stdscr.addstr(i + 1, 5, "Train NMSE: {:.4f}  Test NMSE: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
-        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered NMSE: {:.4f} Source index: {} last accept: {} ".format(last_transfer, last_transfer_rmse, source_index, naccept_target_trf) )
+        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
+        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered rmse: {:.4f} Source index: {} last accept: {} ".format(last_transfer, last_transfer_rmse, source_index, naccept_target_trf) )
 
         stdscr.refresh()
 
@@ -208,7 +208,7 @@ class TransferLearningMCMC:
     def likelihood_func(self, neuralnet, data, w, tausq):
         y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
-        rmse = self.nmse(fx, y)
+        rmse = self.rmse(fx, y)
         loss = -0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq
         return [np.sum(loss), fx, rmse]
 
@@ -261,7 +261,7 @@ class TransferLearningMCMC:
         best_rmse = 999.9
         for index in range(weights.shape[0]):
             fx = self.target.evaluate_proposal(self.targettraindata, weights[index])
-            rmse = self.nmse(fx, y)
+            rmse = self.rmse(fx, y)
             if rmse < best_rmse:
                 best_rmse = rmse
                 best_w = weights[index]
@@ -281,7 +281,7 @@ class TransferLearningMCMC:
 
 
         # ------------------- initialize MCMC
-
+        global start
         start = time.time()
         trainsize = np.zeros((self.numSources))
         testsize = np.zeros((self.numSources))
@@ -574,9 +574,10 @@ class TransferLearningMCMC:
             elapsed = convert_time(time.time() - start)
             self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, naccept_target_trf)
 
+        elapsed = convert_time(time.time() - start)
         stdscr.clear()
         stdscr.refresh()
-        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted".format(naccept / float(samples) * 100.0))
+        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(np.array([naccept_target, naccept_target_trf]) / float(samples) * 100.0, elapsed))
 
         accept_ratio = naccept / (samples * 1.0) * 100
 
@@ -682,19 +683,19 @@ if __name__ == '__main__':
 
 
 
-    input = 4
-    hidden = 15
-    output = 1
+    input = 520
+    hidden = 45
+    output = 2
     topology = [input, hidden, output]
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
     c = 1.2
 
     numTasks = 29
-
+    start = None
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 5
+    numSources = 1
 #    building_id = [0, 1, 2]
 #    floor_id  = [0, 1, 2, 3]
 
@@ -703,16 +704,15 @@ if __name__ == '__main__':
     curses.cbreak()
 
     try:
-
-        targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        for index in range(3):
+            pass
+        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetDatatrain.csv', delimiter=',')[:, :-2]
+        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetDatatest.csv', delimiter=',')[:, :-2]
         traindata = []
         testdata = []
         for index in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(index + 1)+'.csv',
-                                        delimiter=','))
-            testdata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(index + 1)+'.csv',
-                                        delimiter=','))
+            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceDatatrain.csv', delimiter=',')[:, :-2])
+            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceDatatest.csv', delimiter=',')[:, :-2])
 
         stdscr.clear()
         random.seed(time.time())
@@ -720,7 +720,7 @@ if __name__ == '__main__':
         numSamples = 4000# need to decide yourself
 
 
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIndoorLoc')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
@@ -733,7 +733,7 @@ if __name__ == '__main__':
 
 
         # Plot the accuracies and rmse
-        mcmc_task.plot_rmse('synthetic_data')
+        mcmc_task.plot_rmse('UJIndoorLoc')
 
     finally:
         curses.echo()

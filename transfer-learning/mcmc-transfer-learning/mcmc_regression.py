@@ -417,8 +417,8 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    traindata = np.genfromtxt('../../datasets/UJIndoorLoc/trainingData/23.csv', delimiter=',')
-    testdata = np.genfromtxt('../../datasets/UJIndoorLoc/validationData/23.csv', delimiter=',')
+    traindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData0train.csv', delimiter=',')
+    testdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData0test.csv', delimiter=',')
 
     print traindata.shape, testdata.shape
 

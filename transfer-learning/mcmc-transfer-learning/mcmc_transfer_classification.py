@@ -207,6 +207,9 @@ class TransferLearningMCMC:
     def rmse(self, predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
 
+    def nmse(self, predictions, targets):
+        return np.sum((targets - predictions) ** 2)/np.sum((targets - np.mean(targets)) ** 2)
+
     def likelihood_func(self, neuralnet, data, w):
         y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
@@ -716,6 +719,7 @@ class TransferLearningMCMC:
         stdscr.addstr(8, 4, "RMSE: " + str(rmse_target_train_trf) + " Acc: " + str(acc_target_train_trf))
         stdscr.addstr(9, 0, "Target Test results w/ transfer:")
         stdscr.addstr(10, 4, "RMSE: " + str(rmse_target_test_trf) + " Acc: " + str(acc_target_test_trf))
+        stdscr.getkey()
         stdscr.refresh()
 
 
@@ -775,7 +779,7 @@ class TransferLearningMCMC:
 if __name__ == '__main__':
 
     input = 11
-    hidden = 94
+    hidden = 75
     output = 10
     topology = [input, hidden, output]
 
@@ -812,7 +816,7 @@ if __name__ == '__main__':
         numSamples = 4000# need to decide yourself
 
 
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='wine-quality-red')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
@@ -821,11 +825,11 @@ if __name__ == '__main__':
         # start sampling
         accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
         # display train and test accuracies
-        mcmc_task.display_rmse()
+        mcmc_task.display_rmse_acc()
 
 
         # Plot the accuracies and rmse
-        mcmc_task.plot_rmse('synthetic_data')
+        mcmc_task.plot_rmse_acc('wine quality red')
 
     finally:
         curses.echo()

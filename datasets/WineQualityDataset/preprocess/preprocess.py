@@ -25,7 +25,7 @@ def getdata(file):
     sc_X = StandardScaler()
     x1 = sc_X.fit_transform(x)
     x = normalize(x1, norm='l2')
-    
+
     ratio = {'winequality-white': 0.30, 'winequality-red': 0.90}
 
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = ratio[file[3:-4]], random_state = 0)
@@ -61,7 +61,7 @@ if __name__ == '__main__':
         np.savetxt(data+'-train.csv', train, delimiter = ',')
         np.savetxt(data+'-test.csv', test, delimiter = ',')
         print train.shape, test.shape
-    
+
         # print "Testing Train data:\n"
         # testdata(data+'-train.csv')
         #
