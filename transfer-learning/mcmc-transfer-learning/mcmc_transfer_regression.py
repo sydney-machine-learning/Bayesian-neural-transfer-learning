@@ -480,7 +480,6 @@ class TransferLearningMCMC:
                     w[index] = w_proposal[index]
                     eta[index] = eta_pro[index]
 
-                    # print i, trainacc, rmsetrain
                     elapsed = convert_time(time.time() - start)
                     fxtrain_samples[index][i + 1, :, :] = pred_train[index][:,  :]
                     fxtest_samples[index][i + 1, :, :] = pred_test[index][:, :]
@@ -502,9 +501,7 @@ class TransferLearningMCMC:
 
 
             u = random.uniform(0,1)
-            # print mh_prob_target,u
             if u < mh_prob_target:
-                # print "hello"
                 naccept_target += 1
                 likelihood_target = likelihood_target_prop
                 prior_target = prior_target_prop
@@ -529,13 +526,8 @@ class TransferLearningMCMC:
             w_prop = w_target_pro_trf.copy()
 
             if i != 0 and i % quantum == 0:
-                # self.transfersize = random.randint(1, self.wsize+1)
-                # sample_weights = self.transfer(w_proposal.copy(), w_target_pro_trf.copy())
-                # sample_weights = np.vstack([w_proposal, w_target_pro_trf])
                 w_best_target, rmse_best, source_index = self.find_best(w_proposal.copy(), y_train_target.copy())
                 if not np.array_equal(w_best_target, w_target_pro_trf):
-                    # print(" weights transfered \n")
-                    flag = True
                     last_transfer = i
                     last_transfer_rmse = rmse_best
                 w_prop = w_best_target.copy()
@@ -556,10 +548,9 @@ class TransferLearningMCMC:
             u = random.uniform(0,1)
             # print mh_prob_target,u
             if u < mh_prob_target_trf:
-                # naccept_target_trf += 1
                 likelihood_target_trf = likelihood_target_prop_trf
                 prior_target_trf = prior_target_prop_trf
-                w_target_trf = w_target_pro_trf
+                w_target_trf = w_prop
                 eta_target_trf = eta_pro_target_trf
                 try:
                     if not np.array_equal(w_prop, w_target_pro_trf):
@@ -669,9 +660,6 @@ class TransferLearningMCMC:
         plt.plot(x, self.rmse_target_train[burnin: ], '.' , label="no-transfer")
         plt.plot(x, self.rmse_target_train_trf[burnin: ], '.' , label="transfer")
         plt.legend()
-#        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=False, fancybox=False)
-#        leg.get_frame().set_alpha(0.5)
-#        plt.xticks(x)
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' Train RMSE')
@@ -683,9 +671,6 @@ class TransferLearningMCMC:
         plt.plot(x, self.rmse_target_test[burnin: ], '.' , label="no-transfer")
         plt.plot(x, self.rmse_target_test_trf[burnin: ], '.' , label="transfer")
         plt.legend()
-#        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-#        leg.get_frame().set_alpha(0.5)
-#        plt.xticks(x)
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' Test RMSE')

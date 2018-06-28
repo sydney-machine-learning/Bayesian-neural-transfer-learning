@@ -11,6 +11,7 @@ import math
 import os
 import sys
 import pickle
+import curses
 
 
 def convert_time(secs):
@@ -108,7 +109,7 @@ class Network:
         Desired = np.zeros((1, self.Top[2]))
         fx = np.zeros((size,self.Top[2]))
 
-        for i in xrange(0, size):  # to see what fx is produced by your current weight update
+        for i in range(0, size):  # to see what fx is produced by your current weight update
             Input = data[i, 0:self.Top[0]]
             self.ForwardPass(Input)
             fx[i] = self.out
@@ -133,7 +134,7 @@ class Network:
         self.B1 = self.BestB1
         self.B2 = self.BestB2  # load best knowledge
 
-        for s in xrange(0, testSize):
+        for s in range(0, testSize):
 
             Input[:] = Data[s, 0:self.Top[0]]
             Desired[:] = Data[s, self.Top[0]:]
@@ -147,8 +148,8 @@ class Network:
         return (sse / testSize, float(clasPerf) / testSize * 100)
 
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
-class MCMC:
-    def __init__(self, samples, traindata, testdata, topology):
+class TransferLearningMCMC:
+    def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology, directory):
         self.samples = samples  # NN topology [input, hidden, output]
         self.topology = topology  # max epocs
         self.traindata = traindata  #
@@ -174,6 +175,27 @@ class MCMC:
         self.targetTop = self.topology.copy()
         self.targetTop[1] = int(1.0 * self.topology[1])
         self.target = Network(self.targetTop, self.targettraindata, self.targettestdata)
+
+
+    def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse, source_index, naccept_target_trf):
+        stdscr.addstr(0, 0, "Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(sample_count, self.samples, elapsed[0], elapsed[1]))
+        i = 2
+        index = 0
+        for index in range(0, self.numSources):
+            stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index + 1))
+            stdscr.addstr(index + i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmsetrain[index], rmsetest[index]))
+            i += 2
+
+        i = index + i + 2
+        stdscr.addstr(i, 3, "Target w/o transfer Progress:")
+        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target, rmse_test_target))
+
+        i += 4
+        stdscr.addstr(i, 3, "Target w/ transfer Progress:")
+        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
+        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered rmse: {:.4f} Source index: {} last accept: {} ".format(last_transfer, last_transfer_rmse, source_index, naccept_target_trf) )
+
+        stdscr.refresh()
 
     def softmax(self, fx):
         ex = np.exp(fx)
@@ -209,7 +231,7 @@ class MCMC:
         best_rmse = 999.9
         for index in range(weights.shape[0]):
             fx = self.target.evaluate_proposal(self.targettraindata, weights[index])
-            rmse = self.nmse(fx, y)
+            rmse = self.rmse(fx, y)
             if rmse < best_rmse:
                 best_rmse = rmse
                 best_w = weights[index]
@@ -422,6 +444,7 @@ class MCMC:
         naccept = np.zeros((self.numSources))
         naccept_target = 0
         naccept_target_trf = 0
+        mh_prob = np.zeros(self.numSources)
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
@@ -455,6 +478,16 @@ class MCMC:
             diff_prior_target = prior_target_prop - prior_target
             diff_target = min(700, diff_likelihood_target + diff_prior_target)
             mh_prob_target = min(1, math.exp(diff_target))
+
+
+            diff_likelihood = likelihood_proposal - likelihood
+            diff_prior = prior_prop - prior
+            diff = np.zeros(diff_prior.shape)
+            mh_prob = np.zeros(diff.shape)
+
+            for index in range(self.numSources):
+                diff[index] = min(700, diff_likelihood[index] + diff_prior[index])
+                mh_prob[index] = min(1, math.exp(diff[index]))
 
             u = random.uniform(0, 1)
             for index in range(self.numSources):
@@ -528,8 +561,6 @@ class MCMC:
                 # sample_weights = np.vstack([w_proposal, w_target_pro_trf])
                 w_best_target, rmse_best, source_index = self.find_best(w_proposal.copy(), y_train_target.copy())
                 if not np.array_equal(w_best_target, w_target_pro_trf):
-                    # print(" weights transfered \n")
-                    flag = True
                     last_transfer = i
                     last_transfer_rmse = rmse_best
                 w_prop = w_best_target.copy()
@@ -539,7 +570,7 @@ class MCMC:
             [likelihood_target_prop_trf, rmse_train_target_trf, acc_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_prop)
             [likelihood_ignore_trf, rmse_test_target_trf, acc_test_target_trf] = self.likelihood_func(self.target, self.targettestdata, w_prop)
 
-            prior_target_prop_trf = self.log_prior(sigma_squared, w_prop, tau_pro_target_trf)
+            prior_target_prop_trf = self.log_prior(sigma_squared, w_prop)
 
             diff_likelihood_target_trf = likelihood_target_prop_trf - likelihood_target_trf
             diff_prior_target_trf = prior_target_prop_trf - prior_target_trf
@@ -548,12 +579,10 @@ class MCMC:
 
 
             u = random.uniform(0,1)
-            # print mh_prob_target,u
             if u < mh_prob_target_trf:
-                # naccept_target_trf += 1
                 likelihood_target_trf = likelihood_target_prop_trf
                 prior_target_trf = prior_target_prop_trf
-                w_target_trf = w_target_pro_trf
+                w_target_trf = w_prop
                 try:
                     if not np.array_equal(w_prop, w_target_pro_trf):
                         naccept_target_trf = i
@@ -599,56 +628,145 @@ class MCMC:
         return (accept_ratio)
 
 
-    def get_acc(self):
-        self.train_acc = np.genfromtxt(self.directory+'/trainacc.csv')
-        self.test_acc = np.genfromtxt(self.directory+'/testacc.csv')
+    def get_rmse_acc(self):
         self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
         self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
+        if self.numSources == 1:
+            self.rmse_test = self.rmse_test.reshape((self.rmse_test.shape[0], 1))
+            self.rmse_train = self.rmse_train.reshape((self.rmse_train.shape[0], 1))
+        self.rmse_target_train = np.genfromtxt(self.directory+'/targettrainrmse.csv')
+        self.rmse_target_test = np.genfromtxt(self.directory+'/targettestrmse.csv')
+        self.rmse_target_train_trf = np.genfromtxt(self.directory+'/targettrftrainrmse.csv')
+        self.rmse_target_test_trf = np.genfromtxt(self.directory+'/targettrftestrmse.csv')
+        # print self.rmse_test.shape
+        self.acc_train = np.genfromtxt(self.directory+'/trainacc.csv')
+        self.acc_test = np.genfromtxt(self.directory+'/testacc.csv')
+        if self.numSources == 1:
+            self.acc_test = self.rmse_test.reshape((self.acc_test.shape[0], 1))
+            self.acc_train = self.rmse_train.reshape((self.acc_train.shape[0], 1))
+        self.acc_target_train = np.genfromtxt(self.directory+'/targettrainacc.csv')
+        self.acc_target_test = np.genfromtxt(self.directory+'/targettestacc.csv')
+        self.acc_target_train_trf = np.genfromtxt(self.directory+'/targettrftrainacc.csv')
+        self.acc_target_test_trf = np.genfromtxt(self.directory+'/targettrftestacc.csv')
 
-    def display_acc(self):
+
+    def display_rmse_acc(self):
         burnin = 0.1 * self.samples  # use post burn in samples
-        self.get_acc()
-        rmse_tr = np.mean(self.rmse_train[int(burnin):])
-        rmsetr_std = np.std(self.rmse_train[int(burnin):])
+        self.get_rmse_acc()
 
-        rmse_tes = np.mean(self.rmse_test[int(burnin):])
-        rmsetest_std = np.std(self.rmse_test[int(burnin):])
+        rmse_tr = [0 for index in range(self.numSources)]
+        rmsetr_std = [0 for index in range(self.numSources)]
+        rmse_tes = [0 for index in range(self.numSources)]
+        rmsetest_std = [0 for index in range(self.numSources)]
 
-        print "Train accuracy:"
+        for index in range(numSources):
+            rmse_tr[index] = np.mean(self.rmse_train[int(burnin):, index])
+            rmsetr_std[index] = np.std(self.rmse_train[int(burnin):, index])
 
-        print "Mean: " + str(np.mean(self.train_acc[int(burnin):]))
-        print "\nTest accuracy:"
-        print "Mean: " + str(np.mean(self.test_acc[int(burnin):]))
+            rmse_tes[index] = np.mean(self.rmse_test[int(burnin):, index])
+            rmsetest_std[index] = np.std(self.rmse_test[int(burnin):, index])
 
-    def plot_acc(self, dataset):
+        rmse_target_train = np.mean(self.rmse_target_train[int(burnin):])
+        rmsetarget_std_train = np.std(self.rmse_target_train[int(burnin):])
+
+        rmse_target_test = np.mean(self.rmse_target_test[int(burnin):])
+        rmsetarget_std_test = np.std(self.rmse_target_test[int(burnin):])
+
+
+        rmse_target_train_trf = np.mean(self.rmse_target_train_trf[int(burnin):])
+        rmsetarget_std_train_trf = np.std(self.rmse_target_train_trf[int(burnin):])
+
+        rmse_target_test_trf = np.mean(self.rmse_target_test_trf[int(burnin):])
+        rmsetarget_std_test_trf = np.std(self.rmse_target_test_trf[int(burnin):])
+
+        acc_tr = [0 for index in range(self.numSources)]
+        acctr_std = [0 for index in range(self.numSources)]
+        acc_tes = [0 for index in range(self.numSources)]
+        acctest_std = [0 for index in range(self.numSources)]
+
+        for index in range(numSources):
+            acc_tr[index] = np.mean(self.acc_train[int(burnin):, index])
+            acctr_std[index] = np.std(self.acc_train[int(burnin):, index])
+
+            acc_tes[index] = np.mean(self.acc_test[int(burnin):, index])
+            acctest_std[index] = np.std(self.acc_test[int(burnin):, index])
+
+        acc_target_train = np.mean(self.acc_target_train[int(burnin):])
+        acctarget_std_train = np.std(self.acc_target_train[int(burnin):])
+
+        acc_target_test = np.mean(self.acc_target_test[int(burnin):])
+        acctarget_std_test = np.std(self.acc_target_test[int(burnin):])
+
+
+        acc_target_train_trf = np.mean(self.acc_target_train_trf[int(burnin):])
+        acctarget_std_train_trf = np.std(self.acc_target_train_trf[int(burnin):])
+
+        acc_target_test_trf = np.mean(self.acc_target_test_trf[int(burnin):])
+        acctarget_std_test_trf = np.std(self.acc_target_test_trf[int(burnin):])
+
+        # stdscr.addstr(2, 0, "Train rmse:")
+        # stdscr.addstr(3, 4, "Mean: " + str(rmse_tr) + " Std: " + str(rmsetr_std))
+        # stdscr.addstr(4, 0, "Test rmse:")
+        # stdscr.addstr(5, 4, "Mean: " + str(rmse_tes) + " Std: " + str(rmsetest_std))
+        stdscr.addstr(2, 0, "Target Train results w/o transfer:")
+        stdscr.addstr(3, 4, "RMSE: " + str(rmse_target_train) + " Acc: " + str(acc_target_train))
+        stdscr.addstr(4, 0, "Target Test results w/o transfer:")
+        stdscr.addstr(5, 4, "RMSE: " + str(rmse_target_test) + " Acc: " + str(acc_target_test))
+        stdscr.addstr(7, 0, "Target Train results w/ transfer:")
+        stdscr.addstr(8, 4, "RMSE: " + str(rmse_target_train_trf) + " Acc: " + str(acc_target_train_trf))
+        stdscr.addstr(9, 0, "Target Test results w/ transfer:")
+        stdscr.addstr(10, 4, "RMSE: " + str(rmse_target_test_trf) + " Acc: " + str(acc_target_test_trf))
+        stdscr.refresh()
+
+
+    def plot_rmse_acc(self, dataset):
         if not os.path.isdir(self.directory+'/results'):
             os.mkdir(self.directory+'/results')
 
+        burnin = int(0.1 * self.samples)
+
         ax = plt.subplot(111)
-        plt.plot(range(len(self.train_acc)), self.train_acc, '.' , color='#FA7949', label="train")
-        plt.plot(range(len(self.test_acc)), self.test_acc, '.', color='#1A73B4', label="test")
-
-        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-        leg.get_frame().set_alpha(0.5)
-
+        x = np.array(np.arange(burnin, self.samples))
+        plt.plot(x, self.rmse_target_train[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.rmse_target_train_trf[burnin: ], '.' , label="transfer")
+        plt.legend()
         plt.xlabel('Samples')
-        plt.ylabel('Accuracy')
-        plt.title(dataset + ' Accuracy plot')
-        plt.savefig(self.directory+'/results/accuracy'+ dataset+'-mcmc.png')
+        plt.ylabel('RMSE')
+        plt.title(dataset+' Train RMSE')
+        plt.savefig(self.directory+'/results/rmse-'+dataset+'train-mcmc.png')
+        plt.clf()
 
+
+        ax = plt.subplot(111)
+        plt.plot(x, self.rmse_target_test[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.rmse_target_test_trf[burnin: ], '.' , label="transfer")
+        plt.legend()
+        plt.xlabel('Samples')
+        plt.ylabel('RMSE')
+        plt.title(dataset+' Test RMSE')
+        plt.savefig(self.directory+'/results/rmse-'+dataset+'test-mcmc.png')
         plt.clf()
 
         ax = plt.subplot(111)
-        plt.plot(range(len(self.rmse_train)), self.rmse_train, 'b.', label="train-rmse")
-        plt.plot(range(len(self.rmse_test)), self.rmse_test, 'c.', label="test-rmse")
-
-        leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-        leg.get_frame().set_alpha(0.5)
-
+        x = np.array(np.arange(burnin, self.samples))
+        plt.plot(x, self.acc_target_train[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.acc_target_train_trf[burnin: ], '.' , label="transfer")
+        plt.legend()
         plt.xlabel('Samples')
-        plt.ylabel('RMSE')
-        plt.title(dataset+' RMSE plot')
-        plt.savefig(self.directory+'/results/rmse-'+dataset+'-mcmc.png')
+        plt.ylabel('Accuracy')
+        plt.title(dataset+' Train Accuracy')
+        plt.savefig(self.directory+'/results/acc-'+dataset+'train-mcmc.png')
+        plt.clf()
+
+
+        ax = plt.subplot(111)
+        plt.plot(x, self.acc_target_test[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.acc_target_test_trf[burnin: ], '.' , label="transfer")
+        plt.legend()
+        plt.xlabel('Samples')
+        plt.ylabel('Accuracy')
+        plt.title(dataset+' Test Accuracy')
+        plt.savefig(self.directory+'/results/acc-'+dataset+'test-mcmc.png')
         plt.clf()
 
 
@@ -656,14 +774,10 @@ class MCMC:
 
 if __name__ == '__main__':
 
-    input = 9
-    hidden = 16
-    output = 2
+    input = 11
+    hidden = 94
+    output = 10
     topology = [input, hidden, output]
-
-    etol_tr = 0.2
-    etol = 0.6
-    alpha = 0.1
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
     c = 1.2
@@ -672,164 +786,48 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    # for taskindex in range(numTasks, numTasks+1):
-    taskindex = str(29)
-    traindata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/train.csv', delimiter=',')
-    testdata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/test.csv', delimiter=',')
+    numSources = 1
+#    building_id = [0, 1, 2]
+#    floor_id  = [0, 1, 2, 3]
 
-    random.seed(time.time())
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
 
-    numSamples = 1000# need to decide yourself
+    try:
 
-    mcmc_task = MCMC(numSamples, traindata, testdata, topology)  # declare class
+        targettraindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+        traindata = []
+        testdata = []
+        # for index in range(numSources):
+        traindata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv',
+                                        delimiter=','))
+        testdata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-test.csv',
+                                        delimiter=','))
 
-    # generate random weights
-    w_random = np.random.randn(mcmc_task.wsize)
+        stdscr.clear()
+        random.seed(time.time())
 
-    # start sampling
-    mcmc_task.sampler(w_random, transfer=True, directory='task'+taskindex)
-
-    # display train and test accuracies
-    mcmc_task.display_acc()
-
-    # Plot the accuracies and rmse
-    mcmc_task.plot_acc('Landmine detection Task '+taskindex)
-
-
-
-    w_transfer = mcmc_task.transfer(c)
-    taskindex = str(1)
-    traindata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/train.csv', delimiter=',')
-    testdata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/test.csv', delimiter=',')
-
-    random.seed(time.time())
-
-    numSamples = 200# need to decide yourself
-
-    mcmc_task = MCMC(numSamples, traindata, testdata, topology)  # declare class
-
-    # start sampling
-    mcmc_task.sampler(w_transfer, transfer=False, directory='task'+taskindex)
-
-    # display train and test accuracies
-    mcmc_task.display_acc()
+        numSamples = 4000# need to decide yourself
 
 
-    taskindex = str(1)
-    traindata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/train.csv', delimiter=',')
-    testdata = np.genfromtxt('../../datasets/LandmineData/tasks/task'+taskindex+'/test.csv', delimiter=',')
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data')  # declare class
 
-    random.seed(time.time())
+        # generate random weights
+        w_random = np.random.randn(mcmc_task.wsize)
+        w_random_target = np.random.randn(mcmc_task.wsize_target)
 
-    mcmc_task_trf = MCMC(numSamples, traindata, testdata, topology)  # declare class
-
-    # generate random weights
-    w_random = np.random.randn(mcmc_task_trf.wsize)
-
-    # start sampling
-    mcmc_task_trf.sampler(w_random, transfer=True, directory='task'+taskindex)
-
-    # display train and test accuracies
-    mcmc_task_trf.display_acc()
+        # start sampling
+        accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
+        # display train and test accuracies
+        mcmc_task.display_rmse()
 
 
+        # Plot the accuracies and rmse
+        mcmc_task.plot_rmse('synthetic_data')
 
-
-
-
-
-
-    # #------------------------------- Transfer weights from trained network to Target Task ---------------------------------
-    # w_transfer = mcmc_white.transfer(c)
-    #
-    # # Train for the target task with transfer
-    # traindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
-    # testdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-    #
-    # random.seed(time.time())
-    # numSamples = 10000  # need to decide yourself
-    #
-    # # Create mcmc object for the target task
-    # mcmc_red_trf = MCMC(numSamples, traindata, testdata, topology)
-    #
-    # # start sampling
-    # mcmc_red_trf.sampler(w_transfer, transfer=False)
-    #
-    # # display train and test accuracies
-    # mcmc_red_trf.display_acc()
-    #
-    # # Plot the accuracies and rmse
-    # # mcmc.plot_acc('Wine-Quality-red')
-    #
-    # #------------------------------------------- Target Task Without Transfer-------------------------------------------
-    #
-    # random.seed(time.time())
-    #
-    # # Create mcmc object for the target task
-    # mcmc_red = MCMC(numSamples, traindata, testdata, topology)
-    #
-    # # generate random weights
-    # w_random = np.random.randn(mcmc_red.wsize)
-    #
-    # # start sampling
-    # mcmc_red.sampler(w_random, transfer=False)
-    #
-    # # display train and test accuracies
-    # mcmc_red.display_acc()
-    #
-    #
-    # ----------------------------------------- Plot results of Transfer -----------------------------------------------
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_task.train_acc)), mcmc_task.train_acc, color='#FA7949', label="no-transfer")
-    plt.plot(range(len(mcmc_task_trf.train_acc)), mcmc_task_trf.train_acc, color='#1A73B4', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('Accuracy')
-    plt.title('Landmine task 29 Train Accuracy plot')
-    plt.savefig('./results/accuracy-train-mcmc.png')
-
-    plt.clf()
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_task.test_acc)), mcmc_task.test_acc, color='#FA7949', label="no-transfer")
-    plt.plot(range(len(mcmc_task_trf.test_acc)), mcmc_task_trf.test_acc, color='#1A73B4', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('Accuracy')
-    plt.title('Landmine task 29 Test Accuracy plot')
-    plt.savefig('./results/accuracy-test-mcmc.png')
-
-    plt.clf()
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_task.rmse_train)), mcmc_task.rmse_train, 'b', label="no-transfer")
-    plt.plot(range(len(mcmc_task_trf.rmse_train)), mcmc_task_trf.rmse_train, 'c', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('RMSE')
-    plt.title('Landmine task 29 Train RMSE plot')
-    plt.savefig('./results/rmse-train-mcmc.png')
-    plt.clf()
-
-    ax = plt.subplot(111)
-    plt.plot(range(len(mcmc_task.rmse_test)), mcmc_task.rmse_test, 'b', label="no-transfer")
-    plt.plot(range(len(mcmc_task_trf.rmse_test)), mcmc_task_trf.rmse_test, 'c', label="transfer")
-
-    leg = plt.legend(loc='best', ncol=2, mode="expand", shadow=True, fancybox=True)
-    leg.get_frame().set_alpha(0.5)
-
-    plt.xlabel('Samples')
-    plt.ylabel('RMSE')
-    plt.title('Landmine task 29 Test RMSE plot')
-    plt.savefig('./results/rmse-test-mcmc.png')
-    plt.clf()
+    finally:
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
