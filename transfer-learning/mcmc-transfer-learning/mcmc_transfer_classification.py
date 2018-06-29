@@ -583,12 +583,13 @@ class TransferLearningMCMC:
 
             u = random.uniform(0,1)
             if u < mh_prob_target_trf:
+                naccept_target_trf += 1
                 likelihood_target_trf = likelihood_target_prop_trf
                 prior_target_trf = prior_target_prop_trf
                 w_target_trf = w_prop
                 try:
                     if not np.array_equal(w_prop, w_target_pro_trf):
-                        naccept_target_trf = i
+                        pass
                 except:
                     pass
 
@@ -613,10 +614,10 @@ class TransferLearningMCMC:
 
             elapsed = convert_time(time.time() - start)
             self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, naccept_target_trf)
-
+        elapsed = time.time() - start
         stdscr.clear()
         stdscr.refresh()
-        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted".format(naccept / float(samples) * 100.0))
+        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Time elapsed: {}".format(np.array([naccept_target, naccept_target_trf]) / float(samples) * 100.0, elapsed))
 
         accept_ratio = naccept / (samples * 1.0) * 100
 

@@ -257,6 +257,37 @@ class TransferLearningMCMC:
         return w_prop
 
 
+    def mh_transfer(self, weights, tau_pro, likelihood, prior, rmse_train, rmse_test):
+        sigma_squared = 25
+        nu_1 = 0
+        nu_2 = 0
+        accept = False
+        w_transfer = weights[0]
+        rmse_tr = rmse_train
+        rmse_tes = rmse_test
+        for index in range(1, weights.shape[0]):
+            [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(self.target, self.targettraindata, weights[index], tau_pro)
+            [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(self.target, self.targettraindata, weights[index], tau_pro)
+            prior_prop = self.log_prior(sigma_squared, nu_1, nu_2, weights[index], tau_pro)
+
+            diff_likelihood = likelihood_proposal - likelihood
+            diff_prior = prior_prop - prior
+            diff = min(700, diff_likelihood + diff_prior)
+            mh_prob = min(1, math.exp(diff))
+
+            u = np.random.uniform(0,1)
+
+            if u < mh_prob:
+                likelihood = likelihood_proposal
+                prior = prior_prop
+                w_transfer = weights[index]
+                rmse_tr = rmsetrain
+                rmse_tes = rmsetest
+                accept = True
+
+        return likelihood, prior, w_transfer, rmse_tr, rmse_tes, accept
+
+
     def find_best(self, weights, y):
         best_rmse = 999.9
         for index in range(weights.shape[0]):
@@ -412,6 +443,8 @@ class TransferLearningMCMC:
         naccept = np.zeros((self.numSources))
         naccept_target = 0
         naccept_target_trf = 0
+        accept_target_trf = 0
+
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
@@ -526,55 +559,69 @@ class TransferLearningMCMC:
             w_prop = w_target_pro_trf.copy()
 
             if i != 0 and i % quantum == 0:
-                w_best_target, rmse_best, source_index = self.find_best(w_proposal.copy(), y_train_target.copy())
-                if not np.array_equal(w_best_target, w_target_pro_trf):
-                    last_transfer = i
-                    last_transfer_rmse = rmse_best
-                w_prop = w_best_target.copy()
-                if not np.array_equal(w_best_target, w_prop):
-                    exit()
+                w_sample = np.vstack([w_target_trf, w_target_pro_trf, w_proposal])
+                likelihood_target_trf, prior_target_trf, w_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev, accept = self.mh_transfer(w_sample.copy(),
+                                                                                                                                                  tau_pro_target_trf,
+                                                                                                                                                  likelihood_target_trf,
+                                                                                                                                                  prior_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev)
+                if accept:
+                    accept_target_trf = i
+                    eta_target_trf = eta_pro_target_trf
 
-            [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_prop, tau_pro_target_trf)
-            [likelihood_ignore_trf, pred_test_target_trf, rmse_test_target_trf] = self.likelihood_func(self.target, self.targettestdata, w_prop, tau_pro_target_trf)
-
-            prior_target_prop_trf = self.log_prior(sigma_squared, nu_1, nu_2, w_prop, tau_pro_target_trf)
-
-            diff_likelihood_target_trf = likelihood_target_prop_trf - likelihood_target_trf
-            diff_prior_target_trf = prior_target_prop_trf - prior_target_trf
-            diff_target_trf = min(700, diff_likelihood_target_trf + diff_prior_target_trf)
-            mh_prob_target_trf = min(1, math.exp(diff_target_trf))
-
-
-            u = random.uniform(0,1)
-            # print mh_prob_target,u
-            if u < mh_prob_target_trf:
-                likelihood_target_trf = likelihood_target_prop_trf
-                prior_target_trf = prior_target_prop_trf
-                w_target_trf = w_prop
-                eta_target_trf = eta_pro_target_trf
-                try:
-                    if not np.array_equal(w_prop, w_target_pro_trf):
-                        naccept_target_trf = i
-                except:
-                    pass
-
-                if save_knowledge:
-                    np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
-                    np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
-
-                    # save values into previous variables
-                    rmsetargettrftrain_prev = rmse_train_target_trf
-                    rmsetargettrftest_prev = rmse_test_target_trf
-
-            else:
                 if save_knowledge:
                     np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
                     np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
 
-            elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, naccept_target_trf)
+                # if not np.array_equal(w_best_target, w_target_pro_trf):
+                #     last_transfer = i
+                #     last_transfer_rmse = rmse_best
+                # w_prop = w_best_target.copy()
+                # if not np.array_equal(w_best_target, w_prop):
+                #     exit()
 
-        elapsed = convert_time(time.time() - start)
+            else:
+                [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_target_pro_trf, tau_pro_target_trf)
+                [likelihood_ignore_trf, pred_test_target_trf, rmse_test_target_trf] = self.likelihood_func(self.target, self.targettestdata, w_target_trf, tau_pro_target_trf)
+
+                prior_target_prop_trf = self.log_prior(sigma_squared, nu_1, nu_2, w_target_pro_trf, tau_pro_target_trf)
+
+                diff_likelihood_target_trf = likelihood_target_prop_trf - likelihood_target_trf
+                diff_prior_target_trf = prior_target_prop_trf - prior_target_trf
+                diff_target_trf = min(700, diff_likelihood_target_trf + diff_prior_target_trf)
+                mh_prob_target_trf = min(1, math.exp(diff_target_trf))
+
+
+                u = random.uniform(0,1)
+                # print mh_prob_target,u
+                if u < mh_prob_target_trf:
+                    naccept_target_trf += 1
+                    likelihood_target_trf = likelihood_target_prop_trf
+                    prior_target_trf = prior_target_prop_trf
+                    w_target_trf = w_prop
+                    eta_target_trf = eta_pro_target_trf
+                    try:
+                        if not np.array_equal(w_prop, w_target_pro_trf):
+                            pass
+                    except:
+                        pass
+
+                    if save_knowledge:
+                        np.savetxt(targettrftrainrmsefile, [rmse_train_target_trf])
+                        np.savetxt(targettrftestrmsefile, [rmse_test_target_trf])
+
+                        # save values into previous variables
+                        rmsetargettrftrain_prev = rmse_train_target_trf
+                        rmsetargettrftest_prev = rmse_test_target_trf
+
+                else:
+                    if save_knowledge:
+                        np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
+                        np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
+
+            elapsed = convert_time(time.time() - start)
+            self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
+
+        elapsed = time.time() - start
         stdscr.clear()
         stdscr.refresh()
         stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(np.array([naccept_target, naccept_target_trf]) / float(samples) * 100.0, elapsed))
@@ -647,6 +694,7 @@ class TransferLearningMCMC:
         stdscr.addstr(14, 4, "Mean: " + str(rmse_target_train_trf) + " Std: " + str(rmsetarget_std_train_trf))
         stdscr.addstr(16, 0, "Target Test rmse w/ transfer:")
         stdscr.addstr(17, 4, "Mean: " + str(rmse_target_test_trf) + " Std: " + str(rmsetarget_std_test_trf))
+        stdscr.getkey()
         stdscr.refresh()
 
 
@@ -705,35 +753,34 @@ if __name__ == '__main__':
 
     try:
         for index in range(3):
-            pass
-        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetDatatrain.csv', delimiter=',')[:, :-2]
-        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetDatatest.csv', delimiter=',')[:, :-2]
-        traindata = []
-        testdata = []
-        for index in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceDatatrain.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceDatatest.csv', delimiter=',')[:, :-2])
+            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData'+str(index)+'train.csv', delimiter=',')[:, :-2]
+            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData'+str(index)+'test.csv', delimiter=',')[:, :-2]
+            traindata = []
+            testdata = []
+            # for i in range(numSources):
+            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData'+str(index)+'train.csv', delimiter=',')[:, :-2])
+            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData'+str(index)+'test.csv', delimiter=',')[:, :-2])
 
-        stdscr.clear()
-        random.seed(time.time())
+            stdscr.clear()
+            random.seed(time.time())
 
-        numSamples = 4000# need to decide yourself
-
-
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIndoorLoc')  # declare class
-
-        # generate random weights
-        w_random = np.random.randn(mcmc_task.wsize)
-        w_random_target = np.random.randn(mcmc_task.wsize_target)
-
-        # start sampling
-        fx_train, _, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
-        # display train and test accuracies
-        mcmc_task.display_rmse()
+            numSamples = 4000# need to decide yourself
 
 
-        # Plot the accuracies and rmse
-        mcmc_task.plot_rmse('UJIndoorLoc')
+            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='building_'+ str(index + 1))  # declare class
+
+            # generate random weights
+            w_random = np.random.randn(mcmc_task.wsize)
+            w_random_target = np.random.randn(mcmc_task.wsize_target)
+
+            # start sampling
+            fx_train, _, accept_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr)
+            # display train and test accuracies
+            mcmc_task.display_rmse()
+
+
+            # Plot the accuracies and rmse
+            mcmc_task.plot_rmse('UJIndoorLoc Building '+ str(index + 1))
 
     finally:
         curses.echo()
