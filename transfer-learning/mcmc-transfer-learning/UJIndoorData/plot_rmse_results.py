@@ -5,6 +5,10 @@ import matplotlib as mpl
 
 mpl.style.use('bmh')
 
+mpl.rcParams.update({'font.size': 10})
+mpl.rc('xtick', labelsize=13)
+mpl.rc('ytick', labelsize=13)
+
 building_id = [0, 1, 2]
 
 train_rmse = np.zeros((len(building_id)))
@@ -128,9 +132,10 @@ plt.bar(index + float(bar_width)/2 + 5 * bar_width , test_rmse_mh, bar_width,
                 yerr = test_std_mh,
                 label = 'Test TLMH-MCMC')
 
-plt.xlabel('datasets')
+plt.xlabel('Building')
 plt.ylabel('RMSE')
-plt.xticks(index+3*bar_width, building_id + [3], rotation=0)
+plt.xticks(index+3*bar_width, [ id + 1 for id in building_id], rotation=0)
+plt.title('UJIndoorLoc Dataset')
 plt.legend()
 
 plt.tight_layout()
