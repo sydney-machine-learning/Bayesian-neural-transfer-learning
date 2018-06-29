@@ -171,7 +171,7 @@ class TransferLearningMCMC:
         # ----------------
 
     def report_progress(self, stdscr, sample_count, elapsed, rmsetrain, rmsetest, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer, last_transfer_rmse, source_index, naccept_target_trf):
-        stdscr.addstr(0, 0, "Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(sample_count, self.samples, elapsed[0], elapsed[1]))
+        stdscr.addstr(0, 0, "{} Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(self.directory, sample_count, self.samples, elapsed[0], elapsed[1]))
         i = 2
         index = 0
         for index in range(0, self.numSources):
@@ -752,7 +752,7 @@ if __name__ == '__main__':
     curses.cbreak()
 
     try:
-        for index in range(3):
+        for index in [2]:
             targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData'+str(index)+'train.csv', delimiter=',')[:, :-2]
             targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData'+str(index)+'test.csv', delimiter=',')[:, :-2]
             traindata = []
