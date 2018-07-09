@@ -301,6 +301,9 @@ class TransferLearningMCMC:
 
     def sampler(self, w_pretrain, w_pretrain_target, stdscr, save_knowledge=False, transfer='mh'):
 
+        weights_file = open('weights.csv', 'w')
+        weights_trf_file = open('weights_trf.csv', 'w')
+
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
 
@@ -534,9 +537,13 @@ class TransferLearningMCMC:
                     rmsetrain_sample[index] = rmsetrain_prev[index]
                     rmsetest_sample[index] = rmsetest_prev[index]
 
-            np.savetxt(trainrmsefile, [rmsetrain_sample])
-            np.savetxt(testrmsefile, [rmsetest_sample])
+            if save_knowledge:
+                np.savetxt(trainrmsefile, [rmsetrain_sample])
+                np.savetxt(testrmsefile, [rmsetest_sample])
 
+
+            savedweight0 = w_target
+            savedweight0trf = w_target_trf
 
             u = random.uniform(0,1)
             if u < mh_prob_target:
@@ -547,19 +554,16 @@ class TransferLearningMCMC:
                 eta_target = eta_pro_target
 
                 elapsed = convert_time(time.time() - start)
-                if save_knowledge:
-                    np.savetxt(targettrainrmsefile, [rmse_train_target])
-                    np.savetxt(targettestrmsefile, [rmse_test_target])
 
-                    # save values into previous variables
-                    rmsetargettrain_prev = rmse_train_target
-                    rmsetargettest_prev = rmse_test_target
+                # save values into previous variables
+                rmsetargettrain_prev = rmse_train_target
+                rmsetargettest_prev = rmse_test_target
 
 
-            else:
-                if save_knowledge:
-                    np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
-                    np.savetxt(targettestrmsefile, [rmsetargettest_prev])
+            if save_knowledge:
+                np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
+                np.savetxt(targettestrmsefile, [rmsetargettest_prev])
+                np.savetxt(weights_file, [w_target], delimiter=',')
 
             if transfer != 'none':
                 if i != 0 and i % quantum == 0 :
@@ -584,6 +588,7 @@ class TransferLearningMCMC:
                     if save_knowledge:
                         np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
                         np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
+                        np.savetxt(weights_trf_file, [w_target_trf], delimiter=',')
 
                 else:
                     [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_target_pro_trf, tau_pro_target_trf)
@@ -619,6 +624,8 @@ class TransferLearningMCMC:
                             np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
                             np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
 
+                    np.savetxt(weights_trf_file, [w_target_trf], delimiter=',')
+
             elapsed = convert_time(time.time() - start)
             self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
 
@@ -636,6 +643,8 @@ class TransferLearningMCMC:
         targettestrmsefile.close()
         targettrftrainrmsefile.close()
         targettrftestrmsefile.close()
+        weights_file.close()
+        weights_trf_file.close()
 
         return (fxtrain_samples, fxtest_samples, accept_ratio)
 
@@ -768,7 +777,7 @@ if __name__ == '__main__':
             numSamples = 4000# need to decide yourself
 
 
-            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data')  # declare class
+            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data_test')  # declare class
 
             # generate random weights
             w_random = np.random.randn(mcmc_task.wsize)
