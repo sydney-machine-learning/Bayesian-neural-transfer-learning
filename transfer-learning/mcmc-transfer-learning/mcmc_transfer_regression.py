@@ -769,13 +769,13 @@ if __name__ == '__main__':
 
     try:
         for index in [0]:
-            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData2train.csv', delimiter=',')[:, :-2]
-            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData2test.csv', delimiter=',')[:, :-2]
+            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2train.csv', delimiter=',')[:, :-2]
+            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2test.csv', delimiter=',')[:, :-2]
             traindata = []
             testdata = []
             for i in range(numSources):
-                traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Source Data/sourceData2train.csv', delimiter=',')[:, :-2])
-                testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData2test.csv', delimiter=',')[:, :-2])
+                traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/2train.csv', delimiter=',')[:, :-2])
+                testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2test.csv', delimiter=',')[:, :-2])
 
             stdscr.clear()
             random.seed(time.time())

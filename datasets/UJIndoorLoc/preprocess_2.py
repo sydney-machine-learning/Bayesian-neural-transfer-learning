@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.model_selection import train_test_split
 import time
+import os
 
 def normalizedata(data):
     a = 0
@@ -47,9 +48,11 @@ targetdata = data[sourcesize:, :]
 # print sourcedata.shape, targetdata.shape
 
 datadict = {'sourceData':sourcedata, 'targetData':targetdata}
-sizedict = {'sourceData':0.25, 'targetData':0.50}
+sizedict = {'sourceData':0.25, 'targetData':0.30}
 
 for file, data in datadict.items():
+    if not os.path.isdir(file):
+        os.mkdir(file)
     building = {}
     for index in range(data.shape[0]):
         building_id = int(data[index, -1])
@@ -64,6 +67,6 @@ for file, data in datadict.items():
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=sizedict[file], random_state=int(time.time()))
         traindata = np.c_[X_train, y_train]
         testdata = np.c_[X_test, y_test]
-        np.savetxt(file+str(building_id)+'train.csv', traindata, delimiter=',')
-        np.savetxt(file+str(building_id)+'test.csv', testdata, delimiter=',')
+        np.savetxt(file+'/'+str(building_id)+'train.csv', traindata, delimiter=',')
+        np.savetxt(file+'/'+str(building_id)+'test.csv', testdata, delimiter=',')
         print traindata.shape, testdata.shape
