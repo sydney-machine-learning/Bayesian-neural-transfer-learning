@@ -747,9 +747,9 @@ class TransferLearningMCMC:
 
 if __name__ == '__main__':
 
-    input = 4
-    hidden = 25
-    output = 1
+    input = 520
+    hidden = 45
+    output = 2
     topology = [input, hidden, output]
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
@@ -769,13 +769,13 @@ if __name__ == '__main__':
 
     try:
         for index in [0]:
-            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData1train.csv', delimiter=',')
-            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData1test.csv', delimiter=',')
+            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData2train.csv', delimiter=',')[:, :-2]
+            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData2test.csv', delimiter=',')[:, :-2]
             traindata = []
             testdata = []
             for i in range(numSources):
-                traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Source Data/sourceData1train.csv', delimiter=','))
-                testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Source Data/sourceData1test.csv', delimiter=','))
+                traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Source Data/sourceData2train.csv', delimiter=',')[:, :-2])
+                testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData2test.csv', delimiter=',')[:, :-2])
 
             stdscr.clear()
             random.seed(time.time())

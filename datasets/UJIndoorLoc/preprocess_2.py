@@ -26,7 +26,6 @@ def normalizedata(data):
 sourcefile = 'trainingData.csv'
 targetfile = 'validationData.csv'
 
-building = {}
 sourcedata = np.genfromtxt(sourcefile, delimiter=',', skip_header=1)
 targetdata = np.genfromtxt(targetfile, delimiter=',', skip_header=1)
 
@@ -48,7 +47,7 @@ targetdata = data[sourcesize:, :]
 # print sourcedata.shape, targetdata.shape
 
 datadict = {'sourceData':sourcedata, 'targetData':targetdata}
-sizedict = {'sourceData':0.25, 'targetData':0.80}
+sizedict = {'sourceData':0.25, 'targetData':0.50}
 
 for file, data in datadict.items():
     building = {}
