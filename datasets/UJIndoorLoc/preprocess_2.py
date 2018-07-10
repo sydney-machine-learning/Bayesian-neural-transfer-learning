@@ -51,21 +51,20 @@ datadict = {'sourceData':sourcedata, 'targetData':targetdata}
 sizedict = {'sourceData':0.25, 'targetData':0.80}
 
 for file, data in datadict.items():
-    # building = {}
-    # for index in range(data.shape[0]):
-    #     building_id = int(data[index, -1])
-    #     try:
-    #         building[building_id].append(data[index, :])
-    #     except Exception as e:
-    #         building[building_id] = [data[index, :]]
-    # for building_id, data in building.items():
-    data = np.array(data)
-#        print data.shape
-    X = data[:, :-4]
-    y = data[:, -4:]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=sizedict[file], random_state=int(time.time()))
-    traindata = np.c_[X_train, y_train]
-    testdata = np.c_[X_test, y_test]
-    np.savetxt(file+'train.csv', traindata, delimiter=',')
-    np.savetxt(file+'test.csv', testdata, delimiter=',')
-    print traindata.shape, testdata.shape
+    building = {}
+    for index in range(data.shape[0]):
+        building_id = int(data[index, -1])
+        try:
+            building[building_id].append(data[index, :])
+        except Exception as e:
+            building[building_id] = [data[index, :]]
+    for building_id, data in building.items():
+        data = np.array(data)
+        X = data[:, :-4]
+        y = data[:, -4:]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=sizedict[file], random_state=int(time.time()))
+        traindata = np.c_[X_train, y_train]
+        testdata = np.c_[X_test, y_test]
+        np.savetxt(file+str(building_id)+'train.csv', traindata, delimiter=',')
+        np.savetxt(file+str(building_id)+'test.csv', testdata, delimiter=',')
+        print traindata.shape, testdata.shape

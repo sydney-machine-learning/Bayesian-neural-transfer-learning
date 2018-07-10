@@ -747,8 +747,6 @@ class TransferLearningMCMC:
 
 if __name__ == '__main__':
 
-
-
     input = 4
     hidden = 25
     output = 1
@@ -761,7 +759,7 @@ if __name__ == '__main__':
     start = None
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 5
+    numSources = 1
 #    building_id = [0, 1, 2]
 #    floor_id  = [0, 1, 2, 3]
 
@@ -771,13 +769,13 @@ if __name__ == '__main__':
 
     try:
         for index in [0]:
-            targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-            targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData1train.csv', delimiter=',')
+            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/Target Data/targetData1test.csv', delimiter=',')
             traindata = []
             testdata = []
             for i in range(numSources):
-                traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-                testdata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+                traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Source Data/sourceData1train.csv', delimiter=','))
+                testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/Source Data/sourceData1test.csv', delimiter=','))
 
             stdscr.clear()
             random.seed(time.time())
@@ -785,7 +783,7 @@ if __name__ == '__main__':
             numSamples = 4000# need to decide yourself
 
 
-            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='synthetic_data_test')  # declare class
+            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='IndoorLoc')  # declare class
 
             # generate random weights
             w_random = np.random.randn(mcmc_task.wsize)
@@ -798,7 +796,7 @@ if __name__ == '__main__':
 
 
             # Plot the accuracies and rmse
-            mcmc_task.plot_rmse('syntheic data ')
+            mcmc_task.plot_rmse('Wifi ')
 
     finally:
         curses.echo()
