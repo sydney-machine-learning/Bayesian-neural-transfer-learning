@@ -301,6 +301,7 @@ class TransferLearningMCMC:
 
     def sampler(self, w_pretrain, w_pretrain_target, stdscr, save_knowledge=False, transfer='mh'):
 
+        w_save = np.zeros(self.numSources + 2)
         weights_file = open('weights.csv', 'w')
         weights_trf_file = open('weights_trf.csv', 'w')
 
@@ -448,6 +449,11 @@ class TransferLearningMCMC:
         naccept_target_trf = 0
         accept_target_trf = 0
 
+        for index in range(self.numSources):
+            w_save[index] = w[index, 0]
+        w_save[self.numSources] = w_target[0]
+        w_save[self.numSources+1] = w_target_trf[0]
+
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
@@ -461,6 +467,7 @@ class TransferLearningMCMC:
 
             w_proposal = w + np.random.normal(0, step_w, self.wsize)
             w_target_pro = w_target + np.random.normal(0, step_w, self.wsize_target)
+
 
             eta_pro = eta + np.random.normal(0, step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, step_eta, 1)
@@ -540,10 +547,9 @@ class TransferLearningMCMC:
             if save_knowledge:
                 np.savetxt(trainrmsefile, [rmsetrain_sample])
                 np.savetxt(testrmsefile, [rmsetest_sample])
+                w_save[:self.numSources] = w[:, 0]
 
 
-            savedweight0 = w_target
-            savedweight0trf = w_target_trf
 
             u = random.uniform(0,1)
             if u < mh_prob_target:
@@ -563,7 +569,7 @@ class TransferLearningMCMC:
             if save_knowledge:
                 np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
                 np.savetxt(targettestrmsefile, [rmsetargettest_prev])
-                np.savetxt(weights_file, [w_target], delimiter=',')
+                w_save[self.numSources] = w_target[0]
 
             if transfer != 'none':
                 if i != 0 and i % quantum == 0 :
@@ -588,7 +594,7 @@ class TransferLearningMCMC:
                     if save_knowledge:
                         np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
                         np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
-                        np.savetxt(weights_trf_file, [w_target_trf], delimiter=',')
+
 
                 else:
                     [likelihood_target_prop_trf, pred_train_target_trf, rmse_train_target_trf] = self.likelihood_func(self.target, self.targettraindata, w_target_pro_trf, tau_pro_target_trf)
@@ -624,7 +630,9 @@ class TransferLearningMCMC:
                             np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
                             np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
 
-                    np.savetxt(weights_trf_file, [w_target_trf], delimiter=',')
+                if save_knowledge:
+                    w_save[self.numSources + 1] = w_target_trf[0]
+                    np.savetxt(weights_file, [w_save], delimiter=',')
 
             elapsed = convert_time(time.time() - start)
             self.report_progress(stdscr, i, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
