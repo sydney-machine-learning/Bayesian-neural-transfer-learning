@@ -287,6 +287,22 @@ class TransferLearningMCMC:
 
         return likelihood, prior, w_transfer, rmse_tr, rmse_tes, accept
 
+    def calc_mh_prob(network, traindata, testdata, weights, tau, likelihood, prior):
+        accept = False
+        [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(network, traindata, weights, tau)
+        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(network, testdata, weights, tau)
+        prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w_proposal[index], tau_pro[index])  # takes care of the gradients
+        diff_likelihood = likelihood_proposal - likelihood
+        diff_prior = prior_prop - prior
+        diff = min(700, diff_likelihood + diff_prior)
+        mh_prob = min(1, math.exp(diff))
+        u = random.uniform(0, 1)
+        if u < mh_prob:
+            accept = True
+        return accept, rmsetrain, rmsetest
+
+
+
 
     def find_best(self, weights, y):
         best_rmse = 999.9
@@ -303,7 +319,6 @@ class TransferLearningMCMC:
 
         w_save = np.zeros(self.numSources + 2)
         weights_file = open('weights.csv', 'w')
-        weights_trf_file = open('weights_trf.csv', 'w')
 
         trainrmsefile = open(self.directory+'/trainrmse.csv', 'w')
         testrmsefile = open(self.directory+'/testrmse.csv', 'w')
@@ -315,53 +330,30 @@ class TransferLearningMCMC:
         targettrftestrmsefile = open(self.directory+'/targettrftestrmse.csv', 'w')
 
 
-        # ------------------- initialize MCMC
-        global start
-        start = time.time()
-        trainsize = np.zeros((self.numSources))
-        testsize = np.zeros((self.numSources))
-        for index in range(self.numSources):
-            trainsize[index] = self.traindata[index].shape[0]
-            testsize[index] = self.testdata[index].shape[0]
-
-        targettrainsize = self.targettraindata.shape[0]
-        targettestsize = self.targettestdata.shape[0]
 
         samples = self.samples
 
 
-        y_train = []
-        y_test = []
-        netw = self.topology  # [input, hidden, output]
-        netw_target = self.targetTop
-        for index in range(self.numSources):
-            y_test.append(self.testdata[index][:, netw[0]:])
-            y_train.append(self.traindata[index][:, netw[0]:])
+        # ------------------- initialize MCMC
+        global start
+        start = time.time()
 
-        y_test_target = self.targettestdata[:, netw[0]:]
-        y_train_target = self.targettraindata[:, netw[0]:]
-
-
-        pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
-        self.transfersize = netw[0] * netw[1]
-
-        fxtrain_samples = []
-        fxtest_samples = []
-        for index in range(self.numSources):
-            fxtrain_samples.append(np.ones((int(samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
-            fxtest_samples.append(np.ones((int(samples), int(targettrainsize), netw[2])))  # fx of test data over all samples
-
-        fxtarget_train_samples = np.ones((samples, targettrainsize, netw_target[2])) #fx of target train data over all samples
-        fxtarget_test_samples = np.ones((samples, targettestsize, netw_target[2])) #fx of target test data over all samples
-
+        eta = np.zeros((self.numSources))
+        tau_pro = np.zeros((self.numSources))
+        prior = np.zeros((self.numSources))
+        likelihood = np.zeros((self.numSources))
+        likelihood_proposal = np.zeros((self.numSources))
+        rmsetrain = np.zeros((self.numSources))
+        rmsetest = np.zeros((self.numSources))
+        rmsetrain_sample = np.zeros(rmsetrain.shape)
+        rmsetest_sample = np.zeros(rmsetest.shape)
+        trainsize = np.zeros((self.numSources))
+        testsize = np.zeros((self.numSources))
         w = np.zeros((self.numSources, self.wsize))
         w_proposal = np.zeros((self.numSources, self.wsize))
-        for index in range(self.numSources):
-            w[index] = w_pretrain
-            w_proposal[index] = w_pretrain
 
-        w_target = w_pretrain_target
-        w_target_pro = w_pretrain_target
+        pred_train = []
+        pred_test = []
 
         step_w = 0.02  # defines how much variation you need in changes to w
         step_eta = 0.01
@@ -369,52 +361,58 @@ class TransferLearningMCMC:
         nu_1 = 0
         nu_2 = 0
 
-        # -------------------------------------initialize-------------------------
-        pred_train = []
-        pred_test = []
-        eta = np.zeros((self.numSources))
-        tau_pro = np.zeros((self.numSources))
+        fxtrain_samples = []
+        fxtest_samples = []
+
+        y_train = []
+        y_test = []
+
+        netw = self.topology  # [input, hidden, output]
+        netw_target = self.targetTop
 
         for index in range(self.numSources):
+            trainsize[index] = self.traindata[index].shape[0]
+            testsize[index] = self.testdata[index].shape[0]
+            y_test.append(self.testdata[index][:, netw[0]:])
+            y_train.append(self.traindata[index][:, netw[0]:])
+            fxtrain_samples.append(np.ones((int(samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
+            fxtest_samples.append(np.ones((int(samples), int(targettrainsize), netw[2])))  # fx of test data over all samples
+            w[index] = w_pretrain
+            w_proposal[index] = w_pretrain
             pred_train.append(self.sources[index].evaluate_proposal(self.traindata[index], w[index]))
             pred_test.append(self.sources[index].evaluate_proposal(self.testdata[index], w[index]))
             eta[index] = np.log(np.var(pred_train[index] - y_train[index]))
             tau_pro[index] = np.exp(eta[index])
-
-
-        pred_train_target = self.target.evaluate_proposal(self.targettraindata, w_target)
-        pred_test_target = self.target.evaluate_proposal(self.targettestdata, w_target)
-
-        eta_target = np.log(np.var(pred_train_target - y_train_target))
-        tau_pro_target = np.exp(eta_target)
-
-        prior = np.zeros((self.numSources))
-        likelihood = np.zeros((self.numSources))
-        likelihood_proposal = np.zeros((self.numSources))
-
-        rmsetrain = np.zeros((self.numSources))
-        rmsetest = np.zeros((self.numSources))
-
-        for index in range(self.numSources):
             prior[index] = self.log_prior(sigma_squared, nu_1, nu_2, w[index], tau_pro[index])  # takes care of the gradients
             [likelihood[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index], tau_pro[index])
             [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w[index], tau_pro[index])
 
+
+        pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
+        # self.transfersize = netw[0] * netw[1]
+
+        targettrainsize = self.targettraindata.shape[0]
+        targettestsize = self.targettestdata.shape[0]
+        y_test_target = self.targettestdata[:, netw[0]:]
+        y_train_target = self.targettraindata[:, netw[0]:]
+        fxtarget_train_samples = np.ones((samples, targettrainsize, netw_target[2])) #fx of target train data over all samples
+        fxtarget_test_samples = np.ones((samples, targettestsize, netw_target[2])) #fx of target test data over all samples
+        w_target = w_pretrain_target
+        w_target_pro = w_pretrain_target
+        pred_train_target = self.target.evaluate_proposal(self.targettraindata, w_target)
+        pred_test_target = self.target.evaluate_proposal(self.targettestdata, w_target)
+        eta_target = np.log(np.var(pred_train_target - y_train_target))
+        tau_pro_target = np.exp(eta_target)
         prior_target = self.log_prior(sigma_squared, nu_1, nu_2, w_target, tau_pro_target)
         [likelihood_target, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target, tau_pro_target)
         [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target, tau_pro_target)
 
-        rmsetrain_sample = np.zeros(rmsetrain.shape)
-        rmsetest_sample = np.zeros(rmsetest.shape)
-
         w_target_trf = w_target
-
         likelihood_target_trf = likelihood_target
         pred_train_target_trf = pred_train_target
         pred_test_target_trf = pred_test_target
         rmse_train_target_trf = rmse_train_target
         rmse_test_target_trf = rmse_test_target
-
         tau_pro_target_trf = tau_pro_target
         eta_target_trf = eta_target
         prior_target_trf = prior_target
@@ -423,8 +421,6 @@ class TransferLearningMCMC:
         for index in range(self.numSources):
             rmsetrain_sample[index] = rmsetrain[index]
             rmsetest_sample[index] = rmsetest[index]
-
-
         rmsetrain_prev = rmsetrain
         rmsetest_prev = rmsetest
 
@@ -468,43 +464,21 @@ class TransferLearningMCMC:
             w_proposal = w + np.random.normal(0, step_w, self.wsize)
             w_target_pro = w_target + np.random.normal(0, step_w, self.wsize_target)
 
-
             eta_pro = eta + np.random.normal(0, step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, step_eta, 1)
+            # print eta_pro
+            tau_pro = np.exp(eta_pro)
+            tau_pro_target = np.exp(eta_pro_target)
 
             if transfer != 'none':
                 w_target_pro_trf = w_target_trf + np.random.normal(0, step_w, self.wsize_target)
                 eta_pro_target_trf = eta_target_trf + np.random.normal(0, step_eta, 1)
                 tau_pro_target_trf = np.exp(eta_pro_target_trf)
 
-
-
-
-            # print eta_pro
-            tau_pro = np.exp(eta_pro)
-            tau_pro_target = np.exp(eta_pro_target)
-
-
             for index in range(self.numSources):
                 [likelihood_proposal[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w_proposal[index], tau_pro[index])
                 [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w_proposal[index], tau_pro[index])
-
-            # likelihood_ignore  refers to parameter that will not be used in the alg.
-            for index in range(self.numSources):
                 prior_prop[index] = self.log_prior(sigma_squared, nu_1, nu_2, w_proposal[index], tau_pro[index])  # takes care of the gradients
-
-            [likelihood_target_prop, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro, tau_pro_target)
-            [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target_pro, tau_pro_target)
-
-            prior_target_prop = self.log_prior(sigma_squared, nu_1, nu_2, w_target_pro, tau_pro_target)
-
-            diff_likelihood_target = likelihood_target_prop - likelihood_target
-            diff_prior_target = prior_target_prop - prior_target
-            diff_target = min(700, diff_likelihood_target + diff_prior_target)
-            mh_prob_target = min(1, math.exp(diff_target))
-
-
-            # print i, rmse_train_target, rmse_test_target
 
             diff_likelihood = likelihood_proposal - likelihood
             diff_prior = prior_prop - prior
@@ -550,6 +524,15 @@ class TransferLearningMCMC:
                 w_save[:self.numSources] = w[:, 0]
 
 
+            [likelihood_target_prop, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target_pro, tau_pro_target)
+            [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target_pro, tau_pro_target)
+
+            prior_target_prop = self.log_prior(sigma_squared, nu_1, nu_2, w_target_pro, tau_pro_target)
+
+            diff_likelihood_target = likelihood_target_prop - likelihood_target
+            diff_prior_target = prior_target_prop - prior_target
+            diff_target = min(700, diff_likelihood_target + diff_prior_target)
+            mh_prob_target = min(1, math.exp(diff_target))
 
             u = random.uniform(0,1)
             if u < mh_prob_target:
@@ -652,7 +635,6 @@ class TransferLearningMCMC:
         targettrftrainrmsefile.close()
         targettrftestrmsefile.close()
         weights_file.close()
-        weights_trf_file.close()
 
         return (fxtrain_samples, fxtest_samples, accept_ratio)
 
@@ -768,14 +750,20 @@ if __name__ == '__main__':
     curses.cbreak()
 
     try:
-        for index in [0]:
-            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2train.csv', delimiter=',')[:, :-2]
-            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2test.csv', delimiter=',')[:, :-2]
+        for index in [0,1,2]:
+            targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(index)+'train.csv', delimiter=',')[:, :-2]
+            targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(index)+'test.csv', delimiter=',')[:, :-2]
+            # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+            # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+
             traindata = []
             testdata = []
             for i in range(numSources):
-                traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/2train.csv', delimiter=',')[:, :-2])
-                testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2test.csv', delimiter=',')[:, :-2])
+                traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
+                testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
+                # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+                # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+
 
             stdscr.clear()
             random.seed(time.time())
@@ -783,7 +771,7 @@ if __name__ == '__main__':
             numSamples = 4000# need to decide yourself
 
 
-            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='IndoorLoc')  # declare class
+            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIndoorLoc/building_'+str(index+1))  # declare class
 
             # generate random weights
             w_random = np.random.randn(mcmc_task.wsize)
@@ -796,7 +784,7 @@ if __name__ == '__main__':
 
 
             # Plot the accuracies and rmse
-            mcmc_task.plot_rmse('Wifi ')
+            mcmc_task.plot_rmse('Wifi Loc '+str(index+1))
 
     finally:
         curses.echo()

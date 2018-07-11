@@ -9,7 +9,7 @@ mpl.rcParams.update({'font.size': 10})
 mpl.rc('xtick', labelsize=13)
 mpl.rc('ytick', labelsize=13)
 
-building_id = [0, 1, 2]
+building_id = [1, 2, 3]
 
 train_rmse = np.zeros((len(building_id)))
 test_rmse = np.zeros((len(building_id)))
@@ -34,23 +34,23 @@ print('train_mu\tstdtrain\ttest_mu\t\tstdtest\t\ttrain_trf_mu\tstdtrain_trf\ttes
 for index in range(len(building_id)):
 
     building = building_id[index]
-    rmsetrain_trf = np.genfromtxt('./Archive/building'+str(building)+'/targettrftrainrmse.csv')
-    rmsetest_trf = np.genfromtxt('./Archive/building'+str(building)+'/targettrftestrmse.csv')
+    # rmsetrain_trf = np.genfromtxt('building_'+str(building)+'/targettrftrainrmse.csv')
+    # rmsetest_trf = np.genfromtxt('building_'+str(building)+'/targettrftestrmse.csv')
+    #
+    # burnin = int(0.1 * rmsetrain_trf.shape[0])
+    # stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
+    # stdtest_trf = rmsetest_trf[burnin: ].std(axis=0)
+    # rmsetrain_trf_mu = rmsetrain_trf[burnin: ].mean(axis=0)
+    # rmsetest_trf_mu = rmsetest_trf[burnin: ].mean(axis=0)
+    #
+    #
+    # train_rmse_trf[index] = rmsetrain_trf_mu
+    # test_rmse_trf[index] = rmsetest_trf_mu
+    # train_std_trf[index] = stdtrain_trf
+    # test_std_trf[index] = stdtest_trf
 
-    burnin = int(0.1 * rmsetrain_trf.shape[0])
-    stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
-    stdtest_trf = rmsetest_trf[burnin: ].std(axis=0)
-    rmsetrain_trf_mu = rmsetrain_trf[burnin: ].mean(axis=0)
-    rmsetest_trf_mu = rmsetest_trf[burnin: ].mean(axis=0)
-
-
-    train_rmse_trf[index] = rmsetrain_trf_mu
-    test_rmse_trf[index] = rmsetest_trf_mu
-    train_std_trf[index] = stdtrain_trf
-    test_std_trf[index] = stdtest_trf
-
-    rmsetrain = np.genfromtxt('./Archive/building'+str(building)+'/targettrainrmse.csv')
-    rmsetest = np.genfromtxt('./Archive/building'+str(building)+'/targettestrmse.csv')
+    rmsetrain = np.genfromtxt('building_'+str(building)+'/targettrainrmse.csv')
+    rmsetest = np.genfromtxt('building_'+str(building)+'/targettestrmse.csv')
     burnin = int(0.1 * rmsetrain.shape[0])
     stdtrain = rmsetrain[burnin: ].std(axis=0)
     stdtest = rmsetest[burnin: ].std(axis=0)
@@ -63,8 +63,8 @@ for index in range(len(building_id)):
     test_std[index] = stdtest
 
     # rmse and std for w/o transfer results
-    rmsetrain = np.genfromtxt('building_'+str(building+1)+'/targettrftestrmse.csv')
-    rmsetest = np.genfromtxt('building_'+str(building+1)+'/targettrftestrmse.csv')
+    rmsetrain = np.genfromtxt('building_'+str(building)+'/targettrftestrmse.csv')
+    rmsetest = np.genfromtxt('building_'+str(building)+'/targettrftestrmse.csv')
     burnin = int(0.1 * rmsetrain.shape[0])
     stdtrain = rmsetrain[burnin: ].std(axis=0)
     stdtest = rmsetest[burnin: ].std(axis=0)
@@ -101,7 +101,7 @@ plt.bar(index + float(bar_width)/2, train_rmse, bar_width,
 #                 yerr = train_std_trf,
 #                 label = 'Train TL-MCMC')
 
-plt.bar(index + float(bar_width)/2 + 2 * bar_width, train_rmse_mh, bar_width,
+plt.bar(index + float(bar_width)/2 + bar_width, train_rmse_mh, bar_width,
                 alpha = opacity,
                 error_kw = dict(elinewidth=1, ecolor='C9', capsize=capsize),
                 color = 'C2',
@@ -111,7 +111,7 @@ plt.bar(index + float(bar_width)/2 + 2 * bar_width, train_rmse_mh, bar_width,
 
 
 
-plt.bar(index + float(bar_width)/2 + 3 * bar_width, test_rmse, bar_width,
+plt.bar(index + float(bar_width)/2 + 2 * bar_width, test_rmse, bar_width,
                 alpha = opacity,
                 error_kw = dict(elinewidth=1, ecolor='C9', capsize=capsize),
                 color = 'C3',
@@ -125,7 +125,7 @@ plt.bar(index + float(bar_width)/2 + 3 * bar_width, test_rmse, bar_width,
 #                 yerr = test_std_trf,
 #                 label = 'Test TL-MCMC')
 
-plt.bar(index + float(bar_width)/2 + 5 * bar_width , test_rmse_mh, bar_width,
+plt.bar(index + float(bar_width)/2 + 3 * bar_width , test_rmse_mh, bar_width,
                 alpha = opacity,
                 error_kw = dict(elinewidth=1, ecolor='C9', capsize=capsize),
                 color = 'C5',
@@ -134,7 +134,7 @@ plt.bar(index + float(bar_width)/2 + 5 * bar_width , test_rmse_mh, bar_width,
 
 plt.xlabel('Building')
 plt.ylabel('RMSE')
-plt.xticks(index+3*bar_width, [ id + 1 for id in building_id], rotation=0)
+plt.xticks(index+2*bar_width, [ id for id in building_id], rotation=0)
 plt.title('UJIndoorLoc Dataset')
 plt.legend()
 
