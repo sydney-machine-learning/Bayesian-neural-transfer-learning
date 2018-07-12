@@ -48,7 +48,7 @@ targetdata = data[sourcesize:, :]
 # print sourcedata.shape, targetdata.shape
 
 datadict = {'sourceData':sourcedata, 'targetData':targetdata}
-sizedict = {'sourceData':0.05, 'targetData':0.50}
+sizedict = {'sourceData':0.05, 'targetData':0.95}
 
 for file, data in datadict.items():
     if not os.path.isdir(file):
