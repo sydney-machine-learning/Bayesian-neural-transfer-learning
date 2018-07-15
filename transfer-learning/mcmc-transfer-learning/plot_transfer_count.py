@@ -43,7 +43,8 @@ fig, ax = plt.subplots()
 opacity = 0.8
 capsize = 3
 
-plt.plot(prob, test_rmse_trf)
+plt.errorbar(prob, test_rmse_trf, xerr=0, yerr=test_std_trf)
+# plt.plot(prob, test_rmse_trf)
 plt.plot(prob, train_rmse_trf)
 plt.show()
 #data = np.genfromtxt('transfer_cnt.txt', delimiter=',')

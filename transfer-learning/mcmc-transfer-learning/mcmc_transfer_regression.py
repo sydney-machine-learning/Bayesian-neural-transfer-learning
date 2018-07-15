@@ -703,6 +703,8 @@ if __name__ == '__main__':
 #    building_id = [0, 1, 2]
 #    floor_id  = [0, 1, 2, 3]
     prob = np.linspace(0.3, 1.0, 10)
+    prob = [0.3, 0.37, 0.45, 0.53, 0.61, 0.68, 0.76, 0.84, 0.92, 1.0]
+
     # print(prob)
     stdscr = None
     stdscr = curses.initscr()
