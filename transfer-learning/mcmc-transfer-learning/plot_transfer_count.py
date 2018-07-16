@@ -23,8 +23,8 @@ test_std_trf = np.zeros((len(prob)))
 index = 0
 
 for transfer_prob in prob:
-    rmsetrain_trf = np.genfromtxt('./test_'+str(transfer_prob)+'/targettrftrainrmse.csv')
-    rmsetest_trf = np.genfromtxt('./test_'+str(transfer_prob)+'/targettrftestrmse.csv')
+    rmsetrain_trf = np.genfromtxt('transfer_prob/test_'+str(transfer_prob)+'/targettrftrainrmse.csv')
+    rmsetest_trf = np.genfromtxt('transfer_prob/test_'+str(transfer_prob)+'/targettrftestrmse.csv')
     burnin = int(0.1 * rmsetrain_trf.shape[0])
     stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
     stdtest_trf = rmsetest_trf[burnin: ].std(axis=0)
@@ -50,9 +50,9 @@ ax1.set_ylabel('RMSE', color='C4')
 ax1.tick_params('y', colors='C4')
 
 ax2 = ax1.twinx()
-ax2.plot(prob, transfer_cnt, 'C7')
-ax2.set_ylabel('transfer count', color='C7')
-ax2.tick_params('y', colors='C7')
+ax2.plot(prob, transfer_cnt, 'C3')
+ax2.set_ylabel('transfer count', color='C3')
+ax2.tick_params('y', colors='C3')
 
 fig.tight_layout()
 plt.savefig('transfer_prob.png')
