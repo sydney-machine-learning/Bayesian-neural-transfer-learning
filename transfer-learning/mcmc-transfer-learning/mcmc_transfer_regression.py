@@ -330,7 +330,7 @@ class TransferLearningMCMC:
 
 
 
-    def sampler(self, w_pretrain, w_pretrain_target, stdscr, transfer_prob, save_knowledge=False, transfer='mh'):
+    def sampler(self, w_pretrain, w_pretrain_target, stdscr, transfer_prob, save_knowledge=False, transfer='mh', quantum_coeff=0.01):
 
         w_save = np.zeros(self.numSources + 2)
         weights_file = open('weights.csv', 'w')
@@ -469,7 +469,8 @@ class TransferLearningMCMC:
         # print 'begin sampling using mcmc random walk'
 
         prior_prop = np.zeros((self.numSources))
-        quantum = int( 0.01 * self.samples )
+        quantum = int( quantum_coeff * self.samples )
+        print( quantum_coeff * self.samples , quantum_coeff)
 
         last_transfer  = 0
         last_transfer_rmse = 0
@@ -704,6 +705,7 @@ if __name__ == '__main__':
 #    floor_id  = [0, 1, 2, 3]
     prob = np.linspace(0.3, 1.0, 10)
     prob = [0.3, 0.37, 0.45, 0.53, 0.61, 0.68, 0.76, 0.84, 0.92, 1.0]
+    # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
 
     # print(prob)
     stdscr = None
@@ -714,7 +716,7 @@ if __name__ == '__main__':
     ntransferlist = []
 
     try:
-        for transfer_prob in prob:
+        for quantum_coeff in np.around(np.linspace(0.005, 0.1, 20), decimals=3):
             stdscr.clear()
             # targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/train.csv', delimiter=',')
             # targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/test.csv', delimiter=',')
@@ -736,22 +738,22 @@ if __name__ == '__main__':
             numSamples = 4000# need to decide yourself
 
 
-            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='test_'+str(transfer_prob))  # declare class
+            mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='quantum/test_'+str(quantum_coeff))  # declare class
 
             # generate random weights
             w_random = np.random.randn(mcmc_task.wsize)
             w_random_target = np.random.randn(mcmc_task.wsize_target)
 
             # start sampling
-            accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', transfer_prob=transfer_prob)
+            accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', transfer_prob=1.0, quantum_coeff=quantum_coeff)
             # display train and test accuracies
             mcmc_task.display_rmse()
 
             ntransferlist.append(ntransfer)
 
             # Plot the accuracies and rmse
-            mcmc_task.plot_rmse('synthetic data '+str(transfer_prob))
-        np.savetxt('transfer_cnt.txt', np.array(ntransferlist))
+            mcmc_task.plot_rmse('synthetic data '+str(quantum_coeff))
+        np.savetxt('quantum_coeff.txt', np.array(ntransferlist))
 
     finally:
         curses.echo()

@@ -213,7 +213,7 @@ class TransferLearningMCMC:
     def likelihood_func(self, neuralnet, data, w):
         y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
-        rmse = self.rmse(fx, y)
+        rmse = self.nmse(fx, y)
         prob = self.softmax(fx)
         loss = 0
         for i in range(y.shape[0]):
@@ -851,13 +851,13 @@ if __name__ == '__main__':
         # for index in range(numSources):
         traindata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv',
                                         delimiter=','))
-        testdata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-test.csv',
+        testdata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv',
                                         delimiter=','))
 
         stdscr.clear()
         random.seed(time.time())
 
-        numSamples = 4000# need to decide yourself
+        numSamples = 15000# need to decide yourself
 
 
         mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='wine-quality-red')  # declare class

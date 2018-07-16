@@ -26,7 +26,7 @@ def getdata(file):
     x1 = sc_X.fit_transform(x)
     x = normalize(x1, norm='l2')
 
-    ratio = {'winequality-white': 0.30, 'winequality-red': 0.90}
+    ratio = {'winequality-white': 0.0, 'winequality-red': 0.95}
 
     X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = ratio[file[3:-4]], random_state = 0)
 
