@@ -4,9 +4,9 @@ import matplotlib as mpl
 
 mpl.style.use('bmh')
 
-mpl.rcParams.update({'font.size': 10})
-mpl.rc('xtick', labelsize=13)
-mpl.rc('ytick', labelsize=13)
+mpl.rcParams.update({'font.size': 12})
+mpl.rc('xtick', labelsize=15)
+mpl.rc('ytick', labelsize=15)
 
 
 
@@ -46,7 +46,7 @@ fig, ax1 = plt.subplots()
 plt.errorbar(prob, test_rmse_trf, xerr=0, yerr=test_std_trf, color='C4')
 ax1.set_xlabel('transfer probabilities')
 # Make the y-axis label, ticks and tick labels match the line color.
-ax1.set_ylabel('RMSE', color='C4')
+ax1.set_ylabel('Test RMSE', color='C4')
 ax1.tick_params('y', colors='C4')
 
 ax2 = ax1.twinx()

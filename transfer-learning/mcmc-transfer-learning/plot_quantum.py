@@ -4,9 +4,9 @@ import matplotlib as mpl
 
 mpl.style.use('bmh')
 
-mpl.rcParams.update({'font.size': 10})
-mpl.rc('xtick', labelsize=13)
-mpl.rc('ytick', labelsize=13)
+mpl.rcParams.update({'font.size': 12})
+mpl.rc('xtick', labelsize=15)
+mpl.rc('ytick', labelsize=15)
 
 
 
@@ -53,5 +53,5 @@ ax2.set_ylabel('transfer count', color='C3')
 ax2.tick_params('y', colors='C3')
 
 fig.tight_layout()
-
+# plt.show()
 plt.savefig('quantum.png')
