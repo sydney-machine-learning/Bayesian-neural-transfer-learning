@@ -213,7 +213,7 @@ class TransferLearningMCMC:
     def likelihood_func(self, neuralnet, data, w):
         y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
-        rmse = self.nmse(fx, y)
+        rmse = self.rmse(fx, y)
         prob = self.softmax(fx)
         loss = 0
         for i in range(y.shape[0]):

@@ -687,9 +687,9 @@ class TransferLearningMCMC:
 
 if __name__ == '__main__':
 
-    input = 522
-    hidden = 45
-    output = 2
+    input = 4
+    hidden = 25
+    output = 1
     topology = [input, hidden, output]
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
@@ -716,18 +716,18 @@ if __name__ == '__main__':
     try:
         # for quantum_coeff in np.around(np.linspace(0.005, 0.1, 20), decimals=3):
         stdscr.clear()
-        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/train.csv', delimiter=',')
-        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/test.csv', delimiter=',')
-        # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/train.csv', delimiter=',')
+        # targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/test.csv', delimiter=',')
+        targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
 
         traindata = []
         testdata = []
         for i in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/train.csv', delimiter=','))
-            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/test.csv', delimiter=','))
-            # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+            # traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/train.csv', delimiter=','))
+            # testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/test.csv', delimiter=','))
+            traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
 
 
         # stdscr.clear()
@@ -736,21 +736,21 @@ if __name__ == '__main__':
         numSamples = 8000# need to decide yourself
 
 
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='UJIndoorLoc')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='quantum/test_0.075')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
         # start sampling
-        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', transfer_prob=1.0)
+        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', transfer_prob=1.0, quantum_coeff=0.075)
         # display train and test accuracies
         mcmc_task.display_rmse()
 
         ntransferlist.append(ntransfer)
 
         # Plot the accuracies and rmse
-        mcmc_task.plot_rmse('UJIndoorLoc')
+        mcmc_task.plot_rmse('synthetic_data')
         # np.savetxt('quantum_coeff.txt', np.array(ntransferlist))
 
     finally:

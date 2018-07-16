@@ -34,20 +34,20 @@ print('train_mu\tstdtrain\ttest_mu\t\tstdtest\t\ttrain_trf_mu\tstdtrain_trf\ttes
 for index in range(len(building_id)):
 
     building = building_id[index]
-    # rmsetrain_trf = np.genfromtxt('building_'+str(building)+'/targettrftrainrmse.csv')
-    # rmsetest_trf = np.genfromtxt('building_'+str(building)+'/targettrftestrmse.csv')
-    #
-    # burnin = int(0.1 * rmsetrain_trf.shape[0])
-    # stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
-    # stdtest_trf = rmsetest_trf[burnin: ].std(axis=0)
-    # rmsetrain_trf_mu = rmsetrain_trf[burnin: ].mean(axis=0)
-    # rmsetest_trf_mu = rmsetest_trf[burnin: ].mean(axis=0)
-    #
-    #
-    # train_rmse_trf[index] = rmsetrain_trf_mu
-    # test_rmse_trf[index] = rmsetest_trf_mu
-    # train_std_trf[index] = stdtrain_trf
-    # test_std_trf[index] = stdtest_trf
+    rmsetrain_trf = np.genfromtxt('building_'+str(building)+'/targettrftrainrmse.csv')
+    rmsetest_trf = np.genfromtxt('building_'+str(building)+'/targettrftestrmse.csv')
+
+    burnin = int(0.1 * rmsetrain_trf.shape[0])
+    stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
+    stdtest_trf = rmsetest_trf[burnin: ].std(axis=0)
+    rmsetrain_trf_mu = rmsetrain_trf[burnin: ].mean(axis=0)
+    rmsetest_trf_mu = rmsetest_trf[burnin: ].mean(axis=0)
+
+
+    train_rmse_trf[index] = rmsetrain_trf_mu
+    test_rmse_trf[index] = rmsetest_trf_mu
+    train_std_trf[index] = stdtrain_trf
+    test_std_trf[index] = stdtest_trf
 
     rmsetrain = np.genfromtxt('building_'+str(building)+'/targettrainrmse.csv')
     rmsetest = np.genfromtxt('building_'+str(building)+'/targettestrmse.csv')
