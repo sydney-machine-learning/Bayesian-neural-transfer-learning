@@ -53,9 +53,9 @@ sizedict = {'sourceData':0.05, 'targetData':0.95}
 for file, data in datadict.items():
     if not os.path.isdir(file):
         os.mkdir(file)
-    # building = {}
-    # for index in range(data.shape[0]):
-    #     building_id = int(data[index, -1])
+    building = {}
+    for index in range(data.shape[0]):
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            building_id = int(data[index, -1])
     #     try:
     #         building[building_id].append(data[index, :])
     #     except Exception as e:

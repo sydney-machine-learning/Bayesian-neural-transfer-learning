@@ -83,10 +83,9 @@ plt.bar(index + float(bar_width)/2 + 5 * bar_width , test_rmse_mh, bar_width,
                 yerr = test_std_mh,
                 label = 'Test TLMH')
 
-plt.xlabel('Dataset')
+plt.xlabel('Datasets')
 plt.ylabel('RMSE')
 plt.xticks(index+3*bar_width, datasets, rotation=0)
-plt.title('UJIndoorLoc Dataset')
 plt.legend()
 plt.savefig('barplot.png')
 

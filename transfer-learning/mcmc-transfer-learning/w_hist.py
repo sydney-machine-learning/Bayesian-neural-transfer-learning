@@ -29,5 +29,5 @@ for index in range(weights.shape[1]-2):
     plt.title('Weight Density plot Source '+str(index+1))
     plt.xlabel('Parameter value')
     plt.ylabel('Density')
-    plt.savefig('weight'+str(index+1)+'.png')
+    plt.savefig('weight'+str(index+1)+'_out.png')
     plt.clf()
