@@ -218,22 +218,17 @@ class TransferLearningMCMC:
 
     @staticmethod
     def distance(fx, y):
-        dist = np.zeros((fx.shape[0],))
-        for i in range(fx.shape[1]):
-            dist += (fx[:, i] - y[:, i])**2
-        dist = np.sqrt(dist).mean()
+        dist = np.sqrt(np.sum(np.square(fx - y), axis=1)).mean()
         return dist
-
-
 
     def likelihood_func(self, neuralnet, data, w, tausq):
         y = data[:, self.topology[0]:].copy()
         fx = neuralnet.evaluate_proposal(data, w)
-        #fx = Network.denormalize(fx, [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
-        #y = Network.denormalize(y, [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
+        fx_m = Network.denormalize(fx.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
+        y_m = Network.denormalize(y.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
         # np.savetxt('y.txt', y, delimiter=',')
-        # rmse = self.distance(fx, y)
-        rmse = self.rmse(fx, y)
+        rmse = self.distance(fx_m, y_m)
+        # rmse = self.rmse(fx, y)
         loss = -0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq
         return [np.sum(loss), fx, rmse]
 
@@ -726,8 +721,8 @@ if __name__ == '__main__':
     try:
         # for transfer_prob in np.around(np.linspace(0.3, 1.2, 20), decimals=2):
         # stdscr.clear()
-        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2train.csv', delimiter=',')[:, :-2]
-        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2test.csv', delimiter=',')[:, :-2]
+        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
         # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
@@ -736,8 +731,8 @@ if __name__ == '__main__':
         traindata = []
         testdata = []
         for i in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/2train.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/2test.csv', delimiter=',')[:, :-2])
+            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/0train.csv', delimiter=',')[:, :-2])
+            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2])
             # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))
@@ -747,7 +742,7 @@ if __name__ == '__main__':
         # stdscr.clear()
         random.seed(time.time())
 
-        numSamples = 4000# need to decide yourself
+        numSamples = 8000# need to decide yourself
 
 
         mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='Wifi')  # declare class
