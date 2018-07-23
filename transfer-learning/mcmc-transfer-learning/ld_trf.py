@@ -135,7 +135,7 @@ class Network:
         Desired = np.zeros((1, self.Top[2]))
         fx = np.zeros(size)
 
-        stochastic = int(0.1 * size)
+        stochastic = int(1 * size)
 
         for i in range(0, depth):
             for j in range(stochastic):
@@ -315,6 +315,7 @@ class TransferLearningMCMC:
         prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, weights, tau)  # takes care of the gradients
         diff_likelihood = likelihood_proposal - likelihood
         diff_prior = prior_prop - prior
+        # print(diff_likelihood, diff_prior, diff_prop)
         diff = min(700, diff_likelihood + diff_prior + diff_prop)
         mh_prob = min(1, math.exp(diff))
         u = random.uniform(0, 1)
@@ -506,7 +507,7 @@ class TransferLearningMCMC:
                 # print("index", index)
                 w_prop_gd = self.sources[index].langevin_gradient(self.traindata[index], w_proposal[index].copy(), self.sgd_depth)
                 # print("shapes: ", w[index].shape, w_gd.shape, self.sigma_diagmat.shape)
-                diff_prop[index] =  np.log(multivariate_normal.pdf(w_proposal[index], w_prop_gd, self.sigma_diagmat)  - np.log(multivariate_normal.pdf(w[index], w_gd, self.sigma_diagmat)))
+                diff_prop[index] =  np.log(multivariate_normal.pdf(w[index], w_prop_gd, self.sigma_diagmat)  - np.log(multivariate_normal.pdf(w_proposal[index], w_gd, self.sigma_diagmat)))
             # print("Sources")
             w_target_pro = w_target + np.random.normal(0, self.step_w, self.wsize_target)
             w_gd_target = self.target.langevin_gradient(self.targettraindata, w_target.copy(), self.sgd_depth) # Eq 8
@@ -522,10 +523,11 @@ class TransferLearningMCMC:
             if transfer != 'none':
                 w_gd_target_trf = self.target.langevin_gradient(self.targettraindata, w_target_trf.copy(), self.sgd_depth) # Eq 8
                 w_target_pro_trf = w_target_trf + np.random.normal(0, self.step_w, self.wsize_target)
-                w_prop_gd = self.target.langevin_gradient(self.targettraindata, w_target_pro_trf.copy(), self.sgd_depth)
-                diff_prop_target_trf =  np.log(multivariate_normal.pdf(w, w_prop_gd, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(w_target_pro_trf, w_gd_target_trf, self.sigma_diagmat_target)))
+                w_prop_gd_target_trf = self.target.langevin_gradient(self.targettraindata, w_target_pro_trf.copy(), self.sgd_depth)
+                diff_prop_target_trf =  np.log(multivariate_normal.pdf(w_target_trf, w_prop_gd_target_trf, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(w_target_pro_trf, w_gd_target_trf, self.sigma_diagmat_target)))
                 eta_pro_target_trf = eta_target_trf + np.random.normal(0, self.step_eta, 1)
                 tau_pro_target_trf = np.exp(eta_pro_target_trf)
+                # print(diff_prop_target_trf, " this one")
 
                 # print("Sources Chalu")
             # Check MH-acceptance probability for all source tasks
@@ -568,6 +570,7 @@ class TransferLearningMCMC:
                 w_save[self.numSources] = w_target[-1]
 
 
+
             # If transfer is True, evaluate proposal for target task with transfer
             if transfer != 'none':
                 u = np.random.uniform(0, 1)
@@ -595,6 +598,7 @@ class TransferLearningMCMC:
                         ntransfer += 1
                     # print(sample, accept, ntransfer, u, transfer_prob)
                 else:
+                    # print("Yhi", diff_prop_target_trf)
                     accept, rmse_train_target_trf, rmse_test_target_trf, likelihood_target_trf, prior_target_trf = self.calc_mh_prob(self.target, self.targettraindata, self.targettestdata, w_target_pro_trf, tau_pro_target_trf, likelihood_target_trf, prior_target_trf, diff_prop_target_trf)
 
                     if accept:
@@ -744,7 +748,7 @@ if __name__ == '__main__':
     transfer_prob = 0.6
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 1
+    numSources = 5
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
