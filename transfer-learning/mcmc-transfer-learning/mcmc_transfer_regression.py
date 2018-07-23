@@ -218,14 +218,15 @@ class TransferLearningMCMC:
 
     @staticmethod
     def distance(fx, y):
-        dist = np.sqrt(np.sum(np.square(fx - y), axis=1)).mean()
+        dist = np.sqrt(np.sum(np.square(fx - y), axis=1)).min()
         return dist
 
     def likelihood_func(self, neuralnet, data, w, tausq):
-        y = data[:, self.topology[0]:].copy()
+        y = data[:, self.topology[0]:self.topology[0]+self.topology[2]].copy()
+        y_m = data[:, 522:524]
         fx = neuralnet.evaluate_proposal(data, w)
         fx_m = Network.denormalize(fx.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
-        y_m = Network.denormalize(y.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
+        # y_m = Network.denormalize(y.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
         # np.savetxt('y.txt', y, delimiter=',')
         rmse = self.distance(fx_m, y_m)
         # rmse = self.rmse(fx, y)
@@ -386,8 +387,8 @@ class TransferLearningMCMC:
         for index in range(self.numSources):
             trainsize[index] = self.traindata[index].shape[0]
             testsize[index] = self.testdata[index].shape[0]
-            y_test.append(self.testdata[index][:, netw[0]:])
-            y_train.append(self.traindata[index][:, netw[0]:])
+            y_test.append(self.testdata[index][:, netw[0]:netw[0]+netw[2]])
+            y_train.append(self.traindata[index][:, netw[0]:netw[0]+netw[2]])
             # fxtrain_samples.append(np.ones((int(self.samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
             # fxtest_samples.append(np.ones((int(self.samples), int(testsize[index]), netw[2])))  # fx of test data over all samples
             w[index] = w_pretrain
@@ -406,8 +407,8 @@ class TransferLearningMCMC:
 
         targettrainsize = self.targettraindata.shape[0]
         targettestsize = self.targettestdata.shape[0]
-        y_test_target = self.targettestdata[:, netw[0]:]
-        y_train_target = self.targettraindata[:, netw[0]:]
+        y_test_target = self.targettestdata[:, netw[0]:netw[0]+netw[2]]
+        y_train_target = self.targettraindata[:, netw[0]:netw[0]+netw[2]]
         # fxtarget_train_samples = np.ones((self.samples, targettrainsize, netw_target[2])) #fx of target train data over all samples
         # fxtarget_test_samples = np.ones((self.samples, targettestsize, netw_target[2])) #fx of target test data over all samples
         w_target = w_pretrain_target
@@ -721,8 +722,8 @@ if __name__ == '__main__':
     try:
         # for transfer_prob in np.around(np.linspace(0.3, 1.2, 20), decimals=2):
         # stdscr.clear()
-        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
@@ -731,8 +732,8 @@ if __name__ == '__main__':
         traindata = []
         testdata = []
         for i in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/0train.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2])
+            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/0train.csv', delimiter=','))
+            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))

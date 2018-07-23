@@ -12,16 +12,16 @@ def normalizedata(data):
     latmin = 4864745.7450159714
     latmax = 4865017.3646842018
 
-    long = data[:, 520]
-    lat = data[:, 521]
+    longi = data[:, 520].copy()
+    lat = data[:, 521].copy()
 
-    long = np.ones(long.shape)*a + (long - np.ones(long.shape)*longmin)*(b - a)/(longmax - longmin)
-    lat = a + (lat - latmin)*(b - a)/(latmax - latmin)
+    long_sc = np.ones(longi.shape)*a + (longi - np.ones(longi.shape)*longmin)*(b - a)/(longmax - longmin)
+    lat_sc = a + (lat - latmin)*(b - a)/(latmax - latmin)
 
-    data[:, 520] = long
-    data[:, 521] = lat
+    data[:, 520] = long_sc
+    data[:, 521] = lat_sc
 
-    return data
+    return data, longi, lat
 
 
 sourcefile = 'trainingData.csv'
@@ -40,7 +40,9 @@ data = np.vstack((sourcedata, targetdata))
 
 data = data[:, :-5]
 
-data = normalizedata(data)
+data, longi, lat = normalizedata(data.copy())
+
+data = np.c_[data, longi, lat]
 
 sourcedata = data[:sourcesize, :]
 targetdata = data[sourcesize:, :]
@@ -55,14 +57,16 @@ for file, data in datadict.items():
         os.mkdir(file)
     building = {}
     for index in range(data.shape[0]):
-        building_id=int(data[index, -1])
+        building_id=int(data[index, -3])
         try:
             building[building_id].append(data[index, :])
         except Exception as e:
             building[building_id] = [data[index, :]]
     for building_id, data in building.items():
         data = np.array(data)
-        X = np.c_[data[:, :-4]]
+        data = np.delete(data, 523, axis=1)
+        data = np.delete(data, 522, axis=1)
+        X = data[:, :-4]
         y = data[:, -4:]
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=sizedict[file], random_state=int(time.time()))
         traindata = np.c_[X_train, y_train]
