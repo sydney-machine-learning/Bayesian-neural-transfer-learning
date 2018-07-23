@@ -223,13 +223,13 @@ class TransferLearningMCMC:
 
     def likelihood_func(self, neuralnet, data, w, tausq):
         y = data[:, self.topology[0]:self.topology[0]+self.topology[2]].copy()
-        y_m = data[:, 522:524]
+        # y_m = data[:, 522:524]
         fx = neuralnet.evaluate_proposal(data, w)
-        fx_m = Network.denormalize(fx.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
+        # fx_m = Network.denormalize(fx.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
         # y_m = Network.denormalize(y.copy(), [0,1], maxa=[-7299.786516730871000, 4865017.3646842018], mina=[-7695.9387549299299000, 4864745.7450159714], a=0, b=1)
         # np.savetxt('y.txt', y, delimiter=',')
-        rmse = self.distance(fx_m, y_m)
-        # rmse = self.rmse(fx, y)
+        # rmse = self.distance(fx_m, y_m)
+        rmse = self.rmse(fx, y)
         loss = -0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq
         return [np.sum(loss), fx, rmse]
 
@@ -695,7 +695,7 @@ if __name__ == '__main__':
 
     # UJIndoor
     input = 520
-    hidden = 45
+    hidden = 105
     output = 2
 
     topology = [input, hidden, output]
@@ -708,7 +708,7 @@ if __name__ == '__main__':
     transfer_prob = 0.6
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 1
+    numSources = 3
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
@@ -722,8 +722,8 @@ if __name__ == '__main__':
     try:
         # for transfer_prob in np.around(np.linspace(0.3, 1.2, 20), decimals=2):
         # stdscr.clear()
-        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')
-        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')
+        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
         # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
@@ -732,8 +732,8 @@ if __name__ == '__main__':
         traindata = []
         testdata = []
         for i in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/0train.csv', delimiter=','))
-            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=','))
+            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
+            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
             # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))

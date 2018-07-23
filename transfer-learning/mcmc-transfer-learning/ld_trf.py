@@ -218,10 +218,12 @@ class TransferLearningMCMC:
         self.targetTop[1] = int(1.0 * self.topology[1])
         self.target = Network(self.targetTop, self.targettraindata, self.targettestdata)
 
-    def rmse(self, predictions, targets):
+    @staticmethod
+    def rmse(predictions, targets):
         return np.sqrt(((predictions - targets) ** 2).mean())
 
-    def nmse(self, predictions, targets):
+    @staticmethod
+    def nmse(predictions, targets):
         return np.sum((targets - predictions) ** 2)/np.sum((targets - np.mean(targets)) ** 2)
 
     @staticmethod
@@ -248,7 +250,8 @@ class TransferLearningMCMC:
         log_loss = part1 - part2 - (1 + nu_1) * np.log(tausq) - (nu_2 / tausq)
         return log_loss
 
-    def genweights(self, w_mean, w_std):
+    @staticmethod
+    def genweights(w_mean, w_std):
         w_prop = np.ones(w_mean.shape)
         for index in range(w_mean.shape[0]):
             w_prop[index] = np.random.normal(w_mean[index], w_std[index], 1)
@@ -320,6 +323,7 @@ class TransferLearningMCMC:
         mh_prob = min(1, math.exp(diff))
         u = random.uniform(0, 1)
         if u < mh_prob:
+            print(mh_prob)
             accept = True
             likelihood = likelihood_proposal
             prior = prior_prop
@@ -499,30 +503,27 @@ class TransferLearningMCMC:
         diff_prop = np.zeros((self.numSources))
 
         for sample in range(self.samples - 1):
-            # print(sample)
-            w_proposal = w + np.random.normal(0, self.step_w, self.wsize)
+
             for index in range(self.numSources):
-                # print(self.traindata[index].shape)
                 w_gd = self.sources[index].langevin_gradient(self.traindata[index], w[index].copy(), self.sgd_depth) # Eq 8
-                # print("index", index)
+                w_proposal[index] = w_gd + np.random.normal(0, self.step_w, self.wsize)
                 w_prop_gd = self.sources[index].langevin_gradient(self.traindata[index], w_proposal[index].copy(), self.sgd_depth)
-                # print("shapes: ", w[index].shape, w_gd.shape, self.sigma_diagmat.shape)
                 diff_prop[index] =  np.log(multivariate_normal.pdf(w[index], w_prop_gd, self.sigma_diagmat)  - np.log(multivariate_normal.pdf(w_proposal[index], w_gd, self.sigma_diagmat)))
-            # print("Sources")
-            w_target_pro = w_target + np.random.normal(0, self.step_w, self.wsize_target)
-            w_gd_target = self.target.langevin_gradient(self.targettraindata, w_target.copy(), self.sgd_depth) # Eq 8
+
+            w_gd_target = self.target.langevin_gradient(self.targettraindata, w_target.copy(), self.sgd_depth)
+            w_target_pro = w_gd_target + np.random.normal(0, self.step_w, self.wsize_target)
             w_prop_gd_target = self.target.langevin_gradient(self.targettraindata, w_target_pro.copy(), self.sgd_depth)
             diff_prop_target =  np.log(multivariate_normal.pdf(w_target, w_prop_gd_target, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(w_target_pro, w_gd_target, self.sigma_diagmat_target)))
 
             eta_pro = eta + np.random.normal(0, self.step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, self.step_eta, 1)
-            # print eta_pro
+
             tau_pro = np.exp(eta_pro)
             tau_pro_target = np.exp(eta_pro_target)
 
             if transfer != 'none':
                 w_gd_target_trf = self.target.langevin_gradient(self.targettraindata, w_target_trf.copy(), self.sgd_depth) # Eq 8
-                w_target_pro_trf = w_target_trf + np.random.normal(0, self.step_w, self.wsize_target)
+                w_target_pro_trf = w_gd_target_trf + np.random.normal(0, self.step_w, self.wsize_target)
                 w_prop_gd_target_trf = self.target.langevin_gradient(self.targettraindata, w_target_pro_trf.copy(), self.sgd_depth)
                 diff_prop_target_trf =  np.log(multivariate_normal.pdf(w_target_trf, w_prop_gd_target_trf, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(w_target_pro_trf, w_gd_target_trf, self.sigma_diagmat_target)))
                 eta_pro_target_trf = eta_target_trf + np.random.normal(0, self.step_eta, 1)
