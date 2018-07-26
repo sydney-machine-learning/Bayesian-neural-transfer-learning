@@ -32,7 +32,8 @@ def convert_time(secs):
 
 # --------------------------------------------- Basic Neural Network Class ---------------------------------------------
 
-class Network:
+class Network(object):
+
     def __init__(self, Topo, Train, Test, learn_rate = 0.5, alpha = 0.1):
         self.Top = Topo  # NN topology [input, hidden, output]
         self.TrainData = Train
@@ -50,7 +51,8 @@ class Network:
         self.hidout = np.zeros((1, self.Top[1]))  # output of first hidden layer
         self.out = np.zeros((1, self.Top[2]))  # output last layer
 
-    def sigmoid(self, x):
+    @staticmethod
+    def sigmoid(x):
         x = x.astype(np.float128)
         return 1 / (1 + np.exp(-x))
 
@@ -129,39 +131,8 @@ class Network:
 
         return fx
 
-
-
-    def TestNetwork(self, phase, erTolerance):
-        Input = np.zeros((1, self.Top[0]))  # temp hold input
-        Desired = np.zeros((1, self.Top[2]))
-        Output = np.zeros((1, self.Top[2]))
-        if phase == 1:
-            Data = self.TestData
-        if phase == 0:
-            Data = self.TrainData
-        clasPerf = 0
-        sse = 0
-        testSize = Data.shape[0]
-        self.W1 = self.BestW1
-        self.W2 = self.BestW2  # load best knowledge
-        self.B1 = self.BestB1
-        self.B2 = self.BestB2  # load best knowledge
-
-        for s in range(0, testSize):
-
-            Input[:] = Data[s, 0:self.Top[0]]
-            Desired[:] = Data[s, self.Top[0]:]
-
-            self.ForwardPass(Input)
-            sse = sse + self.sampleEr(Desired)
-
-            if (np.isclose(self.out, Desired, atol=erTolerance).all()):
-                clasPerf = clasPerf + 1
-
-        return (sse / testSize, float(clasPerf) / testSize * 100)
-
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
-class TransferLearningMCMC:
+class TransferLearningMCMC(object):
     def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology, directory):
         self.samples = samples  # NN topology [input, hidden, output]
         self.topology = topology  # max epocs
@@ -249,16 +220,6 @@ class TransferLearningMCMC:
             w_prop[index] = np.random.normal(w_mean[index], w_std[index], 1)
         return w_prop
 
-    # def transfer(self, w_sources, w_target):
-    #     w_prop = np.zeros((w_sources.shape[0], w_target.shape[0]))
-    #     for index in range(w_sources.shape[0]):
-    #         w_prop[index, :] = w_target[:]
-    #         # print(w_prop.shape)
-    #         w_prop[index, :self.topology[0]*self.topology[1] + self.topology[1]] = w_sources[index, : self.topology[0]*self.topology[1] + self.topology[1]]
-    #         w_prop[index, self.targetTop[0]*self.targetTop[1] + self.targetTop[1] : self.targetTop[0]*self.targetTop[1] + self.targetTop[1] + self.topology[1] * self.topology[2] + self.topology[2]] = w_sources[index, self.topology[0]*self.topology[1] +self.topology[1]:]
-    #     return w_prop
-
-
     def transfer(self, weights, eta, likelihood, prior, rmse_train, rmse_test):
         accept = False
         w_transfer = weights[0]
@@ -270,11 +231,10 @@ class TransferLearningMCMC:
         index = 1 + np.random.uniform(0, self.numSources, 1).astype('int')
         w_source = weights[index][0]
         source_proposal = weights[self.numSources + index][0]
-        # print(w_transfer.shape, w_source.shape, source_proposal.shape)
 
         tau = np.exp(eta[index])
         sampleaccept, rmsetrain, rmsetest, likelihood, prior = self.transfer_prob(self.target, self.targettraindata, self.targettestdata, w_transfer, w_source , source_proposal, tau, likelihood, prior)
-        # print(sampleaccept)
+
         if sampleaccept:
             w_transfer = w_source
             eta_transfer = eta[index]
@@ -289,32 +249,32 @@ class TransferLearningMCMC:
         accept = False
         [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(network, traindata, w_source, tau)
         [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(network, testdata, w_source, tau)
-        prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w_source, tau)  # takes care of the gradients
+        prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w_source, tau)
         diff_likelihood = likelihood_proposal - likelihood
         diff_prior = prior_prop - prior
 
-        diagmat_size = int(0.01 * w_current.shape[0])
+        diagmat_size = min(500, w_current.shape[0])
+        # diagmat_size = int(0.01 * w_current.shape[0])
         sigma_diagmat = np.zeros((diagmat_size, diagmat_size))
         np.fill_diagonal(sigma_diagmat, 0.02)
 
-        w_transfer = np.zeros(diagmat_size)
-        w_pres = np.zeros(diagmat_size)
+        w_source_mean = np.zeros(diagmat_size)
+        w_pres_mean = np.zeros(diagmat_size)
         w_proposal = np.zeros(diagmat_size)
 
         indices = np.random.uniform(0, w_current.shape[0], diagmat_size).astype('int')
         for i in range(diagmat_size):
             index = indices[i]
-            w_transfer[i] = w_source[index].copy()
+            w_source_mean[i] = w_source[index].copy()
             w_proposal[i] = w_prop[index].copy()
-            w_pres[i] = w_current[index].copy()
+            w_pres_mean[i] = w_current[index].copy()
             i += 1
 
-        trans_dist_prop = multivariate_normal.logpdf(w_pres, mean=w_proposal, cov=sigma_diagmat)
-        trans_dist_curr = multivariate_normal.logpdf(w_transfer, mean=w_pres, cov=sigma_diagmat)
+        trans_dist_prop = multivariate_normal.logpdf(w_pres_mean, mean=w_source_mean, cov=sigma_diagmat)
+        trans_dist_curr = multivariate_normal.logpdf(w_proposal, mean=w_pres_mean, cov=sigma_diagmat)
 
         transfer_diff = trans_dist_prop - trans_dist_curr
 
-        # print(transfer_diff)
         diff = min(700, diff_likelihood + diff_prior + transfer_diff)
         mh_transfer_prob = min(1, math.exp(diff))
         u = random.uniform(0, 1)
@@ -371,9 +331,6 @@ class TransferLearningMCMC:
         targettrftrainrmsefile = open(self.directory+'/targettrftrainrmse.csv', 'w')
         targettrftestrmsefile = open(self.directory+'/targettrftestrmse.csv', 'w')
 
-        # initialize the number of samples
-        # samples = self.samples
-
         # ------------------- initialize MCMC
         global start
         start = time.time()
@@ -415,8 +372,6 @@ class TransferLearningMCMC:
             testsize[index] = self.testdata[index].shape[0]
             y_test.append(self.testdata[index][:, netw[0]:netw[0]+netw[2]])
             y_train.append(self.traindata[index][:, netw[0]:netw[0]+netw[2]])
-            # fxtrain_samples.append(np.ones((int(self.samples), int(trainsize[index]), netw[2])))  # fx of train data over all samples
-            # fxtest_samples.append(np.ones((int(self.samples), int(testsize[index]), netw[2])))  # fx of test data over all samples
             w[index] = w_pretrain
             w_proposal[index] = w_pretrain
             pred_train.append(self.sources[index].evaluate_proposal(self.traindata[index], w[index]))
@@ -429,14 +384,11 @@ class TransferLearningMCMC:
 
 
         pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
-        # self.transfersize = netw[0] * netw[1]
 
         targettrainsize = self.targettraindata.shape[0]
         targettestsize = self.targettestdata.shape[0]
         y_test_target = self.targettestdata[:, netw[0]:netw[0]+netw[2]]
         y_train_target = self.targettraindata[:, netw[0]:netw[0]+netw[2]]
-        # fxtarget_train_samples = np.ones((self.samples, targettrainsize, netw_target[2])) #fx of target train data over all samples
-        # fxtarget_test_samples = np.ones((self.samples, targettestsize, netw_target[2])) #fx of target test data over all samples
         w_target = w_pretrain_target
         w_target_pro = w_pretrain_target
         pred_train_target = self.target.evaluate_proposal(self.targettraindata, w_target)
@@ -491,24 +443,21 @@ class TransferLearningMCMC:
         w_save[self.numSources] = w_target[-1]
         w_save[self.numSources+1] = w_target_trf[-1]
 
-        # print 'begin sampling using mcmc random walk'
-
         prior_prop = np.zeros((self.numSources))
         quantum = int( quantum_coeff * self.samples )
-        # print( quantum_coeff * self.samples , quantum_coeff)
 
         last_transfer  = 0
         last_transfer_rmse = 0
         source_index = None
 
         for sample in range(self.samples - 1):
-            # print(sample)
+
             w_proposal = w + np.random.normal(0, self.step_w, self.wsize)
             w_target_pro = w_target + np.random.normal(0, self.step_w, self.wsize_target)
 
             eta_pro = eta + np.random.normal(0, self.step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, self.step_eta, 1)
-            # print eta_pro
+
             tau_pro = np.exp(eta_pro)
             tau_pro_target = np.exp(eta_pro_target)
 
@@ -567,7 +516,6 @@ class TransferLearningMCMC:
                         eta = eta.reshape((self.numSources,1))
                         eta_pro = eta_pro.reshape((self.numSources,1))
                         eta_sample = np.vstack([eta_target_trf, eta, eta_pro])
-                        # print(w_sample.shape)
                         likelihood_target_trf, prior_target_trf, w_target_trf, eta_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev, accept = self.transfer(w_sample.copy(), eta_sample,likelihood_target_trf, prior_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev)
 
                     elif transfer == 'best':
@@ -579,7 +527,7 @@ class TransferLearningMCMC:
                     if accept:
                         accept_target_trf = sample
                         ntransfer += 1
-                    # print(sample, accept, ntransfer, u, transfer_prob)
+
                 else:
                     accept, rmse_train_target_trf, rmse_test_target_trf, likelihood_target_trf, prior_target_trf = self.accept_prob(self.target, self.targettraindata, self.targettestdata, w_target_pro_trf, tau_pro_target_trf, likelihood_target_trf, prior_target_trf)
 
@@ -597,7 +545,6 @@ class TransferLearningMCMC:
                     w_save[self.numSources + 1] = w_target_trf[-1]
                     np.savetxt(weights_file, [w_save], delimiter=',')
 
-            # print(rmsetargettest_prev)
 
             elapsed = convert_time(time.time() - start)
             self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, ntransfer)
@@ -720,6 +667,11 @@ if __name__ == '__main__':
     input = 520
     hidden = 105
     output = 2
+
+    # Synathetic
+    # input = 4
+    # hidden = 25
+    # output = 1
 
     topology = [input, hidden, output]
 
