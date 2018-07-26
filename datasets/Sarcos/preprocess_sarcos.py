@@ -12,18 +12,20 @@ def normalise(data):
     data = sc.fit_transform(data)
     data = normalize(data, norm='l2')
     ax = plt.subplot(111)
-    x = np.array(np.arange(600))
-    for i in [3,6]:
-        plt.plot(x, data[:600, 21+i], '.' , label='f'+str(i+1))
-    plt.legend()
-    plt.xlabel('record')
-    plt.ylabel('y')
-    plt.title('fx')
-    plt.savefig('fx.png')
-    plt.clf()
+    x = np.array(np.arange(100))
+    joints = range(7)
+    for i in range(10):
+        plt.plot(x, data[i*100:(i+1)*100, 21+3], '.' , label='f'+str(3))
+        plt.plot(x, data[i*100:(i+1)*100, 21+6], '.' , label='f'+str(6))
+        plt.legend()
+        plt.xlabel('record')
+        plt.ylabel('y')
+        plt.title('fx')
+        plt.savefig(str(i)+'.png')
+        plt.clf()
     return data
 
-def getdata(source=4, target=5):
+def getdata(source=3, target=6):
     dataset_train = scipy.io.loadmat('sarcos_inv.mat')
     dataset_test = scipy.io.loadmat('sarcos_inv_test.mat')
 
@@ -49,7 +51,7 @@ def getdata(source=4, target=5):
     return source, target_train, target_test
 
 if __name__ == '__main__':
-    source, target_train, target_test = getdata(source=3, target=6)
+    source, target_train, target_test = getdata(source=6, target=3)
     np.savetxt('source.csv', source, delimiter=',')
     np.savetxt('target_train.csv', target_train, delimiter=',')
     np.savetxt('target_test.csv', target_test, delimiter=',')

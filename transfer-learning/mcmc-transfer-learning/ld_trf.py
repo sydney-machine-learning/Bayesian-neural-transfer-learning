@@ -130,7 +130,6 @@ class Network:
 
         self.decode(w)  # method to decode w into W1, W2, B1, B2.
         size = data.shape[0]
-
         Input = np.zeros((1, self.Top[0]))  # temp hold input
         Desired = np.zeros((1, self.Top[2]))
         fx = np.zeros(size)
@@ -139,9 +138,10 @@ class Network:
 
         for i in range(0, depth):
             for j in range(stochastic):
-                pat =  random.randint(0, size - 1)
+                # pat =  random.randint(0, size - 1)
+                pat = j
                 Input = data[pat, 0:self.Top[0]]
-                Desired = data[pat, self.Top[0]:]
+                Desired = data[pat, self.Top[0]:self.Top[0]+self.Top[2]]
                 self.ForwardPass(Input)
                 self.BackwardPass(Input, Desired)
             # print("done")
@@ -295,12 +295,23 @@ class TransferLearningMCMC:
         rmse_tes = rmse_test
         eta_transfer = eta[0]
         accept = False
-        for index in range(1, weights.shape[0]):
+
+        tau = np.exp(eta[1])
+        w_gd_target = self.target.langevin_gradient(self.targettraindata, w_transfer.copy(), self.sgd_depth) # Eq 8
+        w_prop_gd_target = self.target.langevin_gradient(self.targettraindata, weights[1].copy(), self.sgd_depth)
+        diff_prop_target =  np.log(multivariate_normal.pdf(w_transfer, w_prop_gd_target, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(weights[1], w_gd_target, self.sigma_diagmat_target)))
+        sampleaccept, rmsetrain, rmsetest, likelihood, prior = self.calc_mh_prob(self.target, self.targettraindata, self.targettestdata, weights[1], tau, likelihood, prior, diff_prop_target)
+        # print(sampleaccept)
+        if sampleaccept:
+            w_transfer = weights[1]
+            eta_transfer = eta[1]
+            rmse_tr = rmsetrain
+            rmse_tes = rmsetest
+            accept = True
+
+        for index in range(2, weights.shape[0]):
             tau = np.exp(eta[index])
-            w_gd_target = self.target.langevin_gradient(self.targettraindata, w_transfer.copy(), self.sgd_depth) # Eq 8
-            w_prop_gd_target = self.target.langevin_gradient(self.targettraindata, weights[index].copy(), self.sgd_depth)
-            diff_prop_target =  np.log(multivariate_normal.pdf(w_transfer, w_prop_gd_target, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(weights[index], w_gd_target, self.sigma_diagmat_target)))
-            sampleaccept, rmsetrain, rmsetest, likelihood, prior = self.calc_mh_prob(self.target, self.targettraindata, self.targettestdata, weights[index], tau, likelihood, prior, diff_prop_target)
+            sampleaccept, rmsetrain, rmsetest, likelihood, prior = self.calc_mh_prob(self.target, self.targettraindata, self.targettestdata, weights[index], tau, likelihood, prior, 0)
             # print(sampleaccept)
             if sampleaccept:
                 w_transfer = weights[index]
@@ -323,7 +334,7 @@ class TransferLearningMCMC:
         mh_prob = min(1, math.exp(diff))
         u = random.uniform(0, 1)
         if u < mh_prob:
-            print(mh_prob)
+            # print(mh_prob)
             accept = True
             likelihood = likelihood_proposal
             prior = prior_prop
@@ -502,18 +513,21 @@ class TransferLearningMCMC:
 
         diff_prop = np.zeros((self.numSources))
 
+        # print(diff_prop)
+
         for sample in range(self.samples - 1):
 
             for index in range(self.numSources):
                 w_gd = self.sources[index].langevin_gradient(self.traindata[index], w[index].copy(), self.sgd_depth) # Eq 8
                 w_proposal[index] = w_gd + np.random.normal(0, self.step_w, self.wsize)
                 w_prop_gd = self.sources[index].langevin_gradient(self.traindata[index], w_proposal[index].copy(), self.sgd_depth)
-                diff_prop[index] =  np.log(multivariate_normal.pdf(w[index], w_prop_gd, self.sigma_diagmat)  - np.log(multivariate_normal.pdf(w_proposal[index], w_gd, self.sigma_diagmat)))
-
+                print(multivariate_normal.pdf(w[index], w_prop_gd, self.sigma_diagmat), multivariate_normal.pdf(w_proposal[index], w_gd, self.sigma_diagmat))
+                diff_prop[index] =  multivariate_normal.logpdf(w[index], w_prop_gd, self.sigma_diagmat) - multivariate_normal.logpdf(w_proposal[index], w_gd, self.sigma_diagmat)
+                print(diff_prop[index])
             w_gd_target = self.target.langevin_gradient(self.targettraindata, w_target.copy(), self.sgd_depth)
             w_target_pro = w_gd_target + np.random.normal(0, self.step_w, self.wsize_target)
             w_prop_gd_target = self.target.langevin_gradient(self.targettraindata, w_target_pro.copy(), self.sgd_depth)
-            diff_prop_target =  np.log(multivariate_normal.pdf(w_target, w_prop_gd_target, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(w_target_pro, w_gd_target, self.sigma_diagmat_target)))
+            diff_prop_target =  np.log(multivariate_normal.pdf(w_target, w_prop_gd_target, self.sigma_diagmat_target))  - np.log(multivariate_normal.pdf(w_target_pro, w_gd_target, self.sigma_diagmat_target))
 
             eta_pro = eta + np.random.normal(0, self.step_eta, 1)
             eta_pro_target = eta_target + np.random.normal(0, self.step_eta, 1)
@@ -525,7 +539,7 @@ class TransferLearningMCMC:
                 w_gd_target_trf = self.target.langevin_gradient(self.targettraindata, w_target_trf.copy(), self.sgd_depth) # Eq 8
                 w_target_pro_trf = w_gd_target_trf + np.random.normal(0, self.step_w, self.wsize_target)
                 w_prop_gd_target_trf = self.target.langevin_gradient(self.targettraindata, w_target_pro_trf.copy(), self.sgd_depth)
-                diff_prop_target_trf =  np.log(multivariate_normal.pdf(w_target_trf, w_prop_gd_target_trf, self.sigma_diagmat_target)  - np.log(multivariate_normal.pdf(w_target_pro_trf, w_gd_target_trf, self.sigma_diagmat_target)))
+                diff_prop_target_trf =  np.log(multivariate_normal.pdf(w_target_trf, w_prop_gd_target_trf, self.sigma_diagmat_target))  - np.log(multivariate_normal.pdf(w_target_pro_trf, w_gd_target_trf, self.sigma_diagmat_target))
                 eta_pro_target_trf = eta_target_trf + np.random.normal(0, self.step_eta, 1)
                 tau_pro_target_trf = np.exp(eta_pro_target_trf)
                 # print(diff_prop_target_trf, " this one")
@@ -581,7 +595,6 @@ class TransferLearningMCMC:
                         w_sample = np.vstack([w_target_trf, w_target_pro_trf, w])
                         eta = eta.reshape((self.numSources,1))
                         eta_sample = np.vstack([eta_target_trf, eta_pro_target_trf, eta])
-                        # print(w_sample.shape)
                         likelihood_target_trf, prior_target_trf, w_target_trf, eta_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev, accept = self.mh_transfer(w_sample.copy(),
                                                                                                                                                   eta_sample,
                                                                                                                                                   likelihood_target_trf,
@@ -618,12 +631,12 @@ class TransferLearningMCMC:
 
             # print(rmsetargettest_prev)
             elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, ntransfer)
+            # self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, ntransfer)
 
         elapsed = time.time() - start
-        stdscr.clear()
-        stdscr.refresh()
-        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100.0, elapsed))
+        # stdscr.clear()
+        # stdscr.refresh()
+        # stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100.0, elapsed))
 
         accept_ratio = naccept / (self.samples * 1.0) * 100
 
@@ -730,14 +743,14 @@ class TransferLearningMCMC:
 if __name__ == '__main__':
 
     # Sarcos
-    # input = 21
-    # hidden = 45
-    # output = 1
-
-    # UJIndoor
-    input = 4
-    hidden = 25
+    input = 21
+    hidden = 45
     output = 1
+
+    # # UJIndoor
+    # input = 520
+    # hidden = 94
+    # output = 2
 
     topology = [input, hidden, output]
 
@@ -749,13 +762,13 @@ if __name__ == '__main__':
     transfer_prob = 0.6
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 5
+    numSources = 1
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
-    stdscr = curses.initscr()
-    curses.noecho()
-    curses.cbreak()
+    # stdscr = curses.initscr()
+    # curses.noecho()
+    # curses.cbreak()
 
     ntransferlist = []
     transfer_prob = 1
@@ -765,47 +778,47 @@ if __name__ == '__main__':
         # stdscr.clear()
         # targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
         # targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
-        # targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+        # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=',')
 
         traindata = []
         testdata = []
         for i in range(numSources):
-            # traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/0train.csv', delimiter=',')[:100, :-2])
-            # testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:100, :-2])
-            traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
-            # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=','))
+            # traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
+            # testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2])
+            # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+            traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))
+            testdata.append(np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
 
         # stdscr.clear()
         random.seed(time.time())
 
-        numSamples = 1000# need to decide yourself
+        numSamples = 2000# need to decide yourself
 
 
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='Wifi')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='Sarcos')  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
         # start sampling
-        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', transfer_prob=transfer_prob)
+        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='best', transfer_prob=transfer_prob)
         # display train and test accuracies
         mcmc_task.display_rmse()
 
         ntransferlist.append(ntransfer)
 
         # Plot the accuracies and rmse
-        mcmc_task.plot_rmse('UJIndoorLoc')
+        mcmc_task.plot_rmse('SARCOS')
         # np.savetxt('transfer_prob.txt', np.array(ntransferlist))
 
     finally:
-        curses.echo()
-        curses.nocbreak()
-        curses.endwin()
+        # curses.echo()
+        # curses.nocbreak()
+        # curses.endwin()
         pass
