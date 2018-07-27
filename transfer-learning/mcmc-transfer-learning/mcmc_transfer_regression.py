@@ -682,7 +682,7 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 1
+    numSources = 3
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
