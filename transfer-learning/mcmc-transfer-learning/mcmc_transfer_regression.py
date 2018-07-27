@@ -439,6 +439,7 @@ class TransferLearningMCMC(object):
         naccept_target_trf = 0
         accept_target_trf = 0
         ntransfer = 0
+        transfer_attempts = 0
 
         for index in range(self.numSources):
             w_save[index] = w[index, -1]
@@ -512,6 +513,7 @@ class TransferLearningMCMC(object):
             if transfer != 'none':
                 if sample != 0 and sample % quantum == 0:
                     accept = False
+                    transfer_attempts += 1
                     if transfer == 'mh':
                         w_sample = np.vstack([w_target_trf, w, w_proposal])
                         eta = eta.reshape((self.numSources,1))
@@ -556,6 +558,7 @@ class TransferLearningMCMC(object):
         stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100.0, elapsed))
 
         accept_ratio = naccept / (self.samples * 1.0) * 100
+        transfer_ratio = ntransfer / transfer_attempts * 100
 
         # Close the files
         trainrmsefile.close()
@@ -566,7 +569,7 @@ class TransferLearningMCMC(object):
         targettrftestrmsefile.close()
         weights_file.close()
 
-        return (accept_ratio, ntransfer)
+        return (accept_ratio, transfer_ratio)
 
 
 
@@ -726,7 +729,7 @@ if __name__ == '__main__':
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
         # start sampling
-        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.005)
+        accept_ratio, transfer_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.005)
 
         # display train and test accuracies
         mcmc_task.display_rmse()
@@ -735,7 +738,6 @@ if __name__ == '__main__':
 
         # Plot the accuracies and rmse
         mcmc_task.plot_rmse('UJIndoorLoc')
-        # np.savetxt('transfer_prob.txt', np.array(ntransferlist))
 
     finally:
         curses.echo()
