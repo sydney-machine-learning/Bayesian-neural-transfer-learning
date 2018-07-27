@@ -103,17 +103,19 @@ class Network(object):
         return w
 
     @staticmethod
-    def denormalize(data, indices, maxa, mina, a=0, b=1):
-        for itr in range(len(indices)):
-            attribute = data[:, indices[itr]]
-            # print(itr, attribute[2],end=' ')
-            attribute = mina[itr] + (attribute - a)*((maxa[itr] - mina[itr])/(b - a))
-            # print(attribute[2])
-            # print()
-            data[:, indices[itr]] = attribute
-        # print("yeh",attribute, maxa[itr])
-        return data
+    def scaler(data, maxout=1, minout=0, maxin=1, minin=0):
+        attribute = data[:]
+        attribute = minout + (attribute - minin)*((maxout - minout)/(maxin - minin))
+        return attribute
 
+    @staticmethod
+    def denormalize(data, indices, maxval, minval):
+        for i in range(indices):
+            index = indices[i]
+            attribute = data[:, index]
+            attribute = Network.scaler(attribute, maxout=maxval[i], minout=minval[i], maxin=1, minin=0)
+            data[:, index] = attribute
+        return data
 
     def evaluate_proposal(self, data, w ):  # BP with SGD (Stocastic BP)
 
