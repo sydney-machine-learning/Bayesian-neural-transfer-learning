@@ -317,7 +317,7 @@ class TransferLearningMCMC(object):
 
 
 
-    def sampler(self, w_pretrain, w_pretrain_target, stdscr, transfer_prob, save_knowledge=False, transfer='mh', quantum_coeff=0.01):
+    def sampler(self, w_pretrain, w_pretrain_target, stdscr, save_knowledge=False, transfer='mh', quantum_coeff=0.01):
 
         w_save = np.zeros(self.numSources + 2)
         weights_file = open('weights.csv', 'w')
@@ -508,8 +508,7 @@ class TransferLearningMCMC(object):
 
             # If transfer is True, evaluate proposal for target task with transfer
             if transfer != 'none':
-                u = np.random.uniform(0, 1)
-                if sample != 0 and sample % quantum == 0 and u < transfer_prob:
+                if sample != 0 and sample % quantum == 0:
                     accept = False
                     if transfer == 'mh':
                         w_sample = np.vstack([w_target_trf, w, w_proposal])
@@ -725,7 +724,7 @@ if __name__ == '__main__':
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
         # start sampling
-        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.05)
+        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.005)
 
         # display train and test accuracies
         mcmc_task.display_rmse()
