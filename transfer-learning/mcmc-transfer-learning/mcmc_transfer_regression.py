@@ -232,12 +232,12 @@ class TransferLearningMCMC(object):
         w_source = weights[index][0]
         source_proposal = weights[self.numSources + index][0]
 
-        tau = np.exp(eta[index])
+        tau = np.exp(eta[self.numSources + index])
         sampleaccept, rmsetrain, rmsetest, likelihood, prior = self.transfer_prob(self.target, self.targettraindata, self.targettestdata, w_transfer, w_source , source_proposal, tau, likelihood, prior)
 
         if sampleaccept:
-            w_transfer = w_source
-            eta_transfer = eta[index]
+            w_transfer = source_proposal
+            eta_transfer = eta[self.numSources + index]
             rmse_tr = rmsetrain
             rmse_tes = rmsetest
             accept = True
@@ -247,9 +247,9 @@ class TransferLearningMCMC(object):
 
     def transfer_prob(self, network, traindata, testdata, w_current, w_source, w_prop, tau, likelihood, prior):
         accept = False
-        [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(network, traindata, w_source, tau)
-        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(network, testdata, w_source, tau)
-        prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w_source, tau)
+        [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(network, traindata, w_prop, tau)
+        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(network, testdata, w_prop, tau)
+        prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w_prop, tau)
         diff_likelihood = likelihood_proposal - likelihood
         diff_prior = prior_prop - prior
 
