@@ -683,7 +683,7 @@ if __name__ == '__main__':
     transfer_prob = 0.6
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    numSources = 1
+    numSources = 3
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
@@ -707,8 +707,8 @@ if __name__ == '__main__':
         traindata = []
         testdata = []
         for i in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/0train.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2])
+            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
+            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
             # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))
@@ -718,9 +718,7 @@ if __name__ == '__main__':
         # stdscr.clear()
         random.seed(time.time())
 
-        numSamples = 4000# need to decide yourself
-
-
+        numSamples = 8000# need to decide yourself
         mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='Wifi')  # declare class
 
         # generate random weights
@@ -729,6 +727,7 @@ if __name__ == '__main__':
 
         # start sampling
         accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', transfer_prob=transfer_prob)
+
         # display train and test accuracies
         mcmc_task.display_rmse()
 
