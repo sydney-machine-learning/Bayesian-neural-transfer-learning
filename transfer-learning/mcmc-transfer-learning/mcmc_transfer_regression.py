@@ -270,8 +270,8 @@ class TransferLearningMCMC(object):
             w_pres_mean[i] = w_current[index].copy()
             i += 1
 
-        trans_dist_prop = multivariate_normal.logpdf(w_pres_mean, mean=w_source_mean, cov=sigma_diagmat)
-        trans_dist_curr = multivariate_normal.logpdf(w_proposal, mean=w_pres_mean, cov=sigma_diagmat)
+        trans_dist_prop = multivariate_normal.logpdf(w_pres_mean, mean=w_proposal, cov=sigma_diagmat)
+        trans_dist_curr = multivariate_normal.logpdf(w_source_mean, mean=w_pres_mean, cov=sigma_diagmat)
 
         transfer_diff = trans_dist_prop - trans_dist_curr
 
