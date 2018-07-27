@@ -270,8 +270,8 @@ class TransferLearningMCMC(object):
             w_pres_mean[i] = w_current[index].copy()
             i += 1
 
-        trans_dist_prop = multivariate_normal.logpdf(w_pres_mean, mean=w_proposal, cov=sigma_diagmat)
-        trans_dist_curr = multivariate_normal.logpdf(w_source_mean, mean=w_pres_mean, cov=sigma_diagmat)
+        trans_dist_prop = multivariate_normal.logpdf(w_pres_mean, mean=w_source_mean, cov=sigma_diagmat)
+        trans_dist_curr = multivariate_normal.logpdf(w_proposal, mean=w_pres_mean, cov=sigma_diagmat)
 
         transfer_diff = trans_dist_prop - trans_dist_curr
 
@@ -680,7 +680,7 @@ if __name__ == '__main__':
 
     numTasks = 29
     start = None
-    transfer_prob = 0.6
+
     #--------------------------------------------- Train for the source task -------------------------------------------
 
     numSources = 3
@@ -692,7 +692,6 @@ if __name__ == '__main__':
     curses.cbreak()
 
     ntransferlist = []
-    transfer_prob = 1
 
     try:
         # for transfer_prob in np.around(np.linspace(0.3, 1.2, 20), decimals=2):
@@ -726,7 +725,7 @@ if __name__ == '__main__':
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
         # start sampling
-        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', transfer_prob=transfer_prob)
+        accept_ratio, ntransfer = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.05)
 
         # display train and test accuracies
         mcmc_task.display_rmse()
