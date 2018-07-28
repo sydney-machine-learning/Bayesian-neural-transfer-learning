@@ -552,13 +552,22 @@ class TransferLearningMCMC(object):
             elapsed = convert_time(time.time() - start)
             self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, ntransfer)
 
+        accept_ratio_target = np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100
         elapsed = time.time() - start
         stdscr.clear()
         stdscr.refresh()
-        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100.0, elapsed))
+        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
 
         accept_ratio = naccept / (self.samples * 1.0) * 100
         transfer_ratio = ntransfer / transfer_attempts * 100
+
+        with open(self.directory+"/ratios.txt", 'w') as accept_ratios_file:
+            for ratio in accept_ratio:
+                accept_ratios_file.write(str(ratio))
+            for ratio in accept_ratio_target:
+                accept_ratios_file.write(str(ratio))
+            accept_ratios_file.write(str(transfer_ratio))
+
 
         # Close the files
         trainrmsefile.close()
