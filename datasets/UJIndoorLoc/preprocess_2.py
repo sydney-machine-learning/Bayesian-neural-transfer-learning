@@ -75,4 +75,4 @@ for file, data in datadict.items():
         # np.savetxt(file+'/test.csv', testdata, delimiter=',')
         np.savetxt(file+'/'+str(building_id)+'train.csv', traindata, delimiter=',')
         np.savetxt(file+'/'+str(building_id)+'test.csv', testdata, delimiter=',')
-        print traindata.shape, testdata.shape
+        print(traindata.shape, testdata.shape)

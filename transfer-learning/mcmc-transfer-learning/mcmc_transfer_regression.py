@@ -230,7 +230,7 @@ class TransferLearningMCMC(object):
         eta_transfer = eta[0]
         accept = False
 
-        index = 1 + np.random.uniform(0, self.numSources, 1).astype('int')
+        index =  np.random.uniform(1, self.numSources, 1).astype('int')
         w_source = weights[index][0]
         source_proposal = weights[self.numSources + index][0]
 
@@ -244,7 +244,7 @@ class TransferLearningMCMC(object):
             rmse_tes = rmsetest
             accept = True
 
-        return likelihood, prior, w_transfer, eta_transfer, rmse_tr, rmse_tes, accept
+        return likelihood, prior, w_transfer, eta_transfer, rmse_tr, rmse_tes, accept, index
 
 
     def transfer_prob(self, network, traindata, testdata, w_current, w_source, w_prop, tau, likelihood, prior):
@@ -385,7 +385,7 @@ class TransferLearningMCMC(object):
             [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w[index], tau_pro[index])
 
 
-        pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
+        # pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
 
         targettrainsize = self.targettraindata.shape[0]
         targettestsize = self.targettestdata.shape[0]
@@ -514,22 +514,25 @@ class TransferLearningMCMC(object):
                 if sample != 0 and sample % quantum == 0:
                     accept = False
                     transfer_attempts += 1
+                    last_transfer = sample
                     if transfer == 'mh':
                         w_sample = np.vstack([w_target_trf, w, w_proposal])
                         eta = eta.reshape((self.numSources,1))
                         eta_pro = eta_pro.reshape((self.numSources,1))
                         eta_sample = np.vstack([eta_target_trf, eta, eta_pro])
-                        likelihood_target_trf, prior_target_trf, w_target_trf, eta_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev, accept = self.transfer(w_sample.copy(), eta_sample,likelihood_target_trf, prior_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev)
+                        likelihood_target_trf, prior_target_trf, w_target_trf, eta_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev, accept, transfer_index = self.transfer(w_sample.copy(), eta_sample,likelihood_target_trf, prior_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev)
 
                     elif transfer == 'best':
                         w_sample = np.vstack([w, w_proposal])
                         best_w, best_rmse, transfer_index = self.find_best(w_sample, y_train_target)
                         w_sample = np.vstack([w_target_trf, w_target_pro, best_w])
-                        likelihood_target_trf, prior_target_trf, w_target_trf, eta_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev, accept = self.transfer(w_sample.copy(), tau_pro_target_trf, likelihood_target_trf, prior_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev)
+                        likelihood_target_trf, prior_target_trf, w_target_trf, eta_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev, accept, transfer_index = self.transfer(w_sample.copy(), tau_pro_target_trf, likelihood_target_trf, prior_target_trf, rmsetargettrftrain_prev, rmsetargettrftest_prev)
 
                     if accept:
                         accept_target_trf = sample
                         ntransfer += 1
+                        last_transfer_rmse = rmsetargettrftrain_prev
+                        source_index = transfer_index
 
                 else:
                     accept, rmse_train_target_trf, rmse_test_target_trf, likelihood_target_trf, prior_target_trf = self.accept_prob(self.target, self.targettraindata, self.targettestdata, w_target_pro_trf, tau_pro_target_trf, likelihood_target_trf, prior_target_trf)
@@ -550,7 +553,7 @@ class TransferLearningMCMC(object):
 
 
             elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, ntransfer)
+            self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
 
         accept_ratio_target = np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100
         elapsed = time.time() - start
