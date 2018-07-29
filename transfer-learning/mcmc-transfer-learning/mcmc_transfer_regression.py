@@ -566,10 +566,10 @@ class TransferLearningMCMC(object):
 
         with open(self.directory+"/ratios.txt", 'w') as accept_ratios_file:
             for ratio in accept_ratio:
-                accept_ratios_file.write(str(ratio))
+                accept_ratios_file.write(str(ratio) + ' ')
             for ratio in accept_ratio_target:
-                accept_ratios_file.write(str(ratio))
-            accept_ratios_file.write(str(transfer_ratio))
+                accept_ratios_file.write(str(ratio) + ' ')
+            accept_ratios_file.write(str(transfer_ratio) + ' ')
 
 
         # Close the files
