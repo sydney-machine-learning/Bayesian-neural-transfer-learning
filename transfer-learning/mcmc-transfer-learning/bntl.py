@@ -209,7 +209,7 @@ class TransferLearningMCMC(object):
         if self.type == 'regression':
             likelihood, rmse = self.gauss_likelihood(neuralnet, data, w, tau)
         elif self.type == 'classification':
-            likelihood, rmse = self.multi_likelihood(neuralnet, data, w)
+            likelihood, rmse, acc = self.multi_likelihood(neuralnet, data, w)
         return likelihood, rmse
 
     def log_prior(self, w, tau):
@@ -219,19 +219,25 @@ class TransferLearningMCMC(object):
             loss = self.class_prior(self.sigma_squared, w)
         return loss
 
-
-    @staticmethod
-    def multi_likelihood(neuralnet, data, w):
-        y = data[:, neuralnet.Top[0]: neuralnet.Top[0] + neuralnet.Top[2]]
+    def multi_likelihood(self, neuralnet, data, w):
+        y = data[:, self.topology[0]:]
         fx = neuralnet.evaluate_proposal(data, w)
-        rmse = TransferLearningMCMC.rmse(fx, y)
+        rmse = self.rmse(fx, y)
         prob = neuralnet.softmax(fx)
         loss = 0
         for i in range(y.shape[0]):
             for j in range(y.shape[1]):
                 if y[i, j] == 1:
-                    loss += np.log(prob[i, j])
-        return [loss, rmse]
+                    loss += np.log(prob[i, j] + 0.0001)
+
+        out = np.argmax(fx, axis=1)
+        y_out = np.argmax(y, axis=1)
+        count = 0
+        for i in range(y_out.shape[0]):
+            if out[i] == y_out[i]:
+                count += 1
+        acc = float(count)/y_out.shape[0] * 100
+        return [loss, rmse, acc]
 
     def class_prior(self, sigma_squared, w):
         h = self.topology[1]  # number hidden neurons
@@ -241,8 +247,7 @@ class TransferLearningMCMC(object):
         log_loss = part1 - part2
         return log_loss
 
-    @staticmethod
-    def gauss_likelihood(neuralnet, data, w, tausq):
+    def gauss_likelihood(self, neuralnet, data, w, tausq):
         y = data[:, neuralnet.Top[0]: neuralnet.Top[0] + neuralnet.Top[2]].copy()
         # y_m = data[:, 522:524]
         fx = neuralnet.evaluate_proposal(data, w)
@@ -593,13 +598,13 @@ class TransferLearningMCMC(object):
 
             print(rmsetargettrain_prev, rmsetargettrftrain_prev)
             elapsed = convert_time(time.time() - start)
-            # self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
+            self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
 
         accept_ratio_target = np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100
         elapsed = time.time() - start
-        # stdscr.clear()
-        # stdscr.refresh()
-        # stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
+        stdscr.clear()
+        stdscr.refresh()
+        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
 
         accept_ratio = naccept / (self.samples * 1.0) * 100
         transfer_ratio = ntransfer / transfer_attempts * 100
@@ -716,7 +721,7 @@ if __name__ == '__main__':
 
     name = ["Wine-Quality", "UJIndoorLoc", "Sarcos", "Synthetic"]
     input = [11, 520, 21, 4]
-    hidden = [94, 105, 45, 25]
+    hidden = [75, 105, 45, 25]
     output = [10, 2, 1, 1]
     numSources = [1, 3, 1, 5]
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
@@ -727,19 +732,15 @@ if __name__ == '__main__':
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
 
-    MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
-    c = 1.2
-
-    numTasks = 29
     start = None
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
-    # stdscr = curses.initscr()
-    # curses.noecho()
-    # curses.cbreak()
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
 
     ntransferlist = []
 
@@ -786,7 +787,7 @@ if __name__ == '__main__':
         mcmc_task.plot_rmse(problem_name)
 
     finally:
-        # curses.echo()
-        # curses.nocbreak()
-        # curses.endwin()
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
         pass
