@@ -596,7 +596,6 @@ class TransferLearningMCMC(object):
                     w_save[self.numSources + 1] = w_target_trf[-1]
                     np.savetxt(weights_file, [w_save], delimiter=',')
 
-            print(rmsetargettrain_prev, rmsetargettrftrain_prev)
             elapsed = convert_time(time.time() - start)
             self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
 
