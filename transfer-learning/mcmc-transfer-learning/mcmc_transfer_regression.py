@@ -133,9 +133,17 @@ class Network(object):
 
         return fx
 
+    @staticmethod
+    def softmax(fx):
+        ex = np.exp(fx)
+        sum_ex = np.sum(ex, axis = 1)
+        sum_ex = np.multiply(np.ones(ex.shape), sum_ex[:, np.newaxis])
+        prob = np.divide(ex, sum_ex)
+        return prob
+
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
 class TransferLearningMCMC(object):
-    def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology, directory):
+    def __init__(self, samples, sources, traindata, testdata, targettraindata, targettestdata, topology, directory, type='regression'):
         self.samples = samples  # NN topology [input, hidden, output]
         self.topology = topology  # max epocs
         self.traindata = traindata  #
@@ -143,7 +151,7 @@ class TransferLearningMCMC(object):
         self.targettraindata = targettraindata
         self.targettestdata = targettestdata
         self.numSources = sources
-
+        self.type = type
         # Create file objects to write the attributes of the samples
         self.directory = directory
         if not os.path.isdir(self.directory):
@@ -196,7 +204,45 @@ class TransferLearningMCMC(object):
         dist = np.sqrt(np.sum(np.square(fx - y), axis=1)).min()
         return dist
 
-    def likelihood_func(self, neuralnet, data, w, tausq):
+
+    def likelihood_func(self, neuralnet, data, w, tau):
+        if self.type == 'regression':
+            likelihood, rmse = self.gauss_likelihood(neuralnet, data, w, tau)
+        elif self.type == 'classification':
+            likelihood, rmse = self.multi_likelihood(neuralnet, data, w)
+        return likelihood, rmse
+
+    def log_prior(self, w, tau):
+        if self.type == 'regression':
+            loss = self.reg_prior(self.sigma_squared, self.nu_1, self.nu_2, w, tau)
+        elif self.type == 'classification':
+            loss = self.class_prior(self.sigma_squared, w)
+        return loss
+
+
+    @staticmethod
+    def multi_likelihood(neuralnet, data, w):
+        y = data[:, neuralnet.Top[0]: neuralnet.Top[0] + neuralnet.Top[2]]
+        fx = neuralnet.evaluate_proposal(data, w)
+        rmse = TransferLearningMCMC.rmse(fx, y)
+        prob = neuralnet.softmax(fx)
+        loss = 0
+        for i in range(y.shape[0]):
+            for j in range(y.shape[1]):
+                if y[i, j] == 1:
+                    loss += np.log(prob[i, j])
+        return [loss, rmse]
+
+    def class_prior(self, sigma_squared, w):
+        h = self.topology[1]  # number hidden neurons
+        d = self.topology[0]  # number input neurons
+        part1 = -1 * ((d * h + h + 2) / 2) * np.log(sigma_squared)
+        part2 = 1 / (2 * sigma_squared) * (sum(np.square(w)))
+        log_loss = part1 - part2
+        return log_loss
+
+    @staticmethod
+    def gauss_likelihood(neuralnet, data, w, tausq):
         y = data[:, neuralnet.Top[0]: neuralnet.Top[0] + neuralnet.Top[2]].copy()
         # y_m = data[:, 522:524]
         fx = neuralnet.evaluate_proposal(data, w)
@@ -204,11 +250,11 @@ class TransferLearningMCMC(object):
         # y_m = Network.denormalize(y.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
         # np.savetxt('y.txt', y, delimiter=',')
         # rmse = self.distance(fx_m, y_m)
-        rmse = self.rmse(fx, y)
+        rmse = TransferLearningMCMC.rmse(fx, y)
         loss = -0.5 * np.log(2 * math.pi * tausq) - 0.5 * np.square(y - fx) / tausq
-        return [np.sum(loss), fx, rmse]
+        return [np.sum(loss), rmse]
 
-    def log_prior(self, sigma_squared, nu_1, nu_2, w, tausq):
+    def reg_prior(self, sigma_squared, nu_1, nu_2, w, tausq):
         h = self.topology[1]  # number hidden neurons
         d = self.topology[0]  # number input neurons
         part1 = -1 * ((d * h + h + 2) / 2) * np.log(sigma_squared)
@@ -249,9 +295,9 @@ class TransferLearningMCMC(object):
 
     def transfer_prob(self, network, traindata, testdata, w_current, w_source, w_prop, tau, likelihood, prior):
         accept = False
-        [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(network, traindata, w_prop, tau)
-        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(network, testdata, w_prop, tau)
-        prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w_prop, tau)
+        [likelihood_proposal, rmsetrain] = self.likelihood_func(network, traindata, w_prop, tau)
+        [likelihood_ignore, rmsetest] = self.likelihood_func(network, testdata, w_prop, tau)
+        prior_prop = self.log_prior(w_prop, tau)
         diff_likelihood = likelihood_proposal - likelihood
         diff_prior = prior_prop - prior
 
@@ -290,9 +336,9 @@ class TransferLearningMCMC(object):
 
     def accept_prob(self, network, traindata, testdata, weights, tau, likelihood, prior):
         accept = False
-        [likelihood_proposal, pred_train, rmsetrain] = self.likelihood_func(network, traindata, weights, tau)
-        [likelihood_ignore, pred_test, rmsetest] = self.likelihood_func(network, testdata, weights, tau)
-        prior_prop = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, weights, tau)  # takes care of the gradients
+        [likelihood_proposal, rmsetrain] = self.likelihood_func(network, traindata, weights, tau)
+        [likelihood_ignore, rmsetest] = self.likelihood_func(network, testdata, weights, tau)
+        prior_prop = self.log_prior(weights, tau)  # takes care of the gradients
         diff_likelihood = likelihood_proposal - likelihood
         diff_prior = prior_prop - prior
         diff = min(700, diff_likelihood + diff_prior)
@@ -360,9 +406,6 @@ class TransferLearningMCMC(object):
         self.nu_1 = 0
         self.nu_2 = 0
 
-        fxtrain_samples = []
-        fxtest_samples = []
-
         y_train = []
         y_test = []
 
@@ -377,12 +420,11 @@ class TransferLearningMCMC(object):
             w[index] = w_pretrain
             w_proposal[index] = w_pretrain
             pred_train.append(self.sources[index].evaluate_proposal(self.traindata[index], w[index]))
-            pred_test.append(self.sources[index].evaluate_proposal(self.testdata[index], w[index]))
             eta[index] = np.log(np.var(pred_train[index] - y_train[index]))
             tau_pro[index] = np.exp(eta[index])
-            prior[index] = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w[index], tau_pro[index])  # takes care of the gradients
-            [likelihood[index], pred_train[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index], tau_pro[index])
-            [likelihood_ignore, pred_test[index], rmsetest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w[index], tau_pro[index])
+            prior[index] = self.log_prior(w[index], tau_pro[index])  # takes care of the gradients
+            [likelihood[index], rmsetrain[index]] = self.likelihood_func(self.sources[index], self.traindata[index], w[index], tau_pro[index])
+            [likelihood_ignore, rmsetest[index]] = self.likelihood_func(self.sources[index], self.targettraindata, w[index], tau_pro[index])
 
 
         # pos_w = np.ones((self.samples, self.numSources, self.wsize))  # posterior of all weights and bias over all samples
@@ -394,17 +436,15 @@ class TransferLearningMCMC(object):
         w_target = w_pretrain_target
         w_target_pro = w_pretrain_target
         pred_train_target = self.target.evaluate_proposal(self.targettraindata, w_target)
-        pred_test_target = self.target.evaluate_proposal(self.targettestdata, w_target)
         eta_target = np.log(np.var(pred_train_target - y_train_target))
         tau_pro_target = np.exp(eta_target)
-        prior_target = self.log_prior(self.sigma_squared, self.nu_1, self.nu_2, w_target, tau_pro_target)
-        [likelihood_target, pred_train_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target, tau_pro_target)
-        [likelihood_ignore, pred_test_target, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target, tau_pro_target)
+        prior_target = self.log_prior(w_target, tau_pro_target)
+        [likelihood_target, rmse_train_target] = self.likelihood_func(self.target, self.targettraindata, w_target, tau_pro_target)
+        [likelihood_ignore, rmse_test_target] = self.likelihood_func(self.target, self.targettestdata, w_target, tau_pro_target)
 
         w_target_trf = w_target
         likelihood_target_trf = likelihood_target
         pred_train_target_trf = pred_train_target
-        pred_test_target_trf = pred_test_target
         rmse_train_target_trf = rmse_train_target
         rmse_test_target_trf = rmse_test_target
         tau_pro_target_trf = tau_pro_target
@@ -607,7 +647,7 @@ class TransferLearningMCMC(object):
         rmse_tes = [0 for index in range(self.numSources)]
         rmsetest_std = [0 for index in range(self.numSources)]
 
-        for index in range(numSources):
+        for index in range(self.numSources):
             rmse_tr[index] = np.mean(self.rmse_train[int(burnin):, index])
             rmsetr_std[index] = np.std(self.rmse_train[int(burnin):, index])
 
@@ -674,22 +714,18 @@ class TransferLearningMCMC(object):
 
 if __name__ == '__main__':
 
-    # Sarcos
-    # input = 21
-    # hidden = 45
-    # output = 1
+    name = ["Wine-Quality", "UJIndoorLoc", "Sarcos", "Synthetic"]
+    input = [11, 520, 21, 4]
+    hidden = [94, 105, 45, 25]
+    output = [10, 2, 1, 1]
+    numSources = [1, 3, 1, 5]
+    type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
+    numSamples = [6500, 8000, 4000, 8000]
 
-    # UJIndoor
-    input = 520
-    hidden = 105
-    output = 2
-
-    # Synathetic
-    # input = 4
-    # hidden = 25
-    # output = 1
-
-    topology = [input, hidden, output]
+    problem = 3
+    problemtype = type[problem]
+    topology = [input[problem], hidden[problem], output[problem]]
+    problem_name = name[problem]
 
     MinCriteria = 0.005  # stop when RMSE reaches MinCriteria ( problem dependent)
     c = 1.2
@@ -698,8 +734,6 @@ if __name__ == '__main__':
     start = None
 
     #--------------------------------------------- Train for the source task -------------------------------------------
-
-    numSources = 3
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
@@ -710,22 +744,25 @@ if __name__ == '__main__':
     ntransferlist = []
 
     try:
-        # for transfer_prob in np.around(np.linspace(0.3, 1.2, 20), decimals=2):
         # stdscr.clear()
-        targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+        # targettestdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        # targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=',')
 
         traindata = []
         testdata = []
-        for i in range(numSources):
-            traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
-            # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+        for i in range(numSources[problem]):
+            # traindata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
+            # testdata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
+            # traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
+            # testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
+            traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
@@ -733,8 +770,7 @@ if __name__ == '__main__':
         # stdscr.clear()
         random.seed(time.time())
 
-        numSamples = 8000# need to decide yourself
-        mcmc_task = TransferLearningMCMC(numSamples, numSources, traindata, testdata, targettraindata, targettestdata, topology,  directory='Wifi')  # declare class
+        mcmc_task = TransferLearningMCMC(numSamples[problem], numSources[problem], traindata, testdata, targettraindata, targettestdata, topology,  directory=problem_name, type=problemtype)  # declare class
 
         # generate random weights
         w_random = np.random.randn(mcmc_task.wsize)
@@ -746,10 +782,8 @@ if __name__ == '__main__':
         # display train and test accuracies
         mcmc_task.display_rmse()
 
-        ntransferlist.append(ntransfer)
-
         # Plot the accuracies and rmse
-        mcmc_task.plot_rmse('UJIndoorLoc')
+        mcmc_task.plot_rmse(problem_name)
 
     finally:
         curses.echo()
