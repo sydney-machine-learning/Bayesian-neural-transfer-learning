@@ -591,15 +591,15 @@ class TransferLearningMCMC(object):
                     w_save[self.numSources + 1] = w_target_trf[-1]
                     np.savetxt(weights_file, [w_save], delimiter=',')
 
-
+            print(rmsetargettrain_prev, rmsetargettrftrain_prev)
             elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
+            # self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
 
         accept_ratio_target = np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100
         elapsed = time.time() - start
-        stdscr.clear()
-        stdscr.refresh()
-        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
+        # stdscr.clear()
+        # stdscr.refresh()
+        # stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
 
         accept_ratio = naccept / (self.samples * 1.0) * 100
         transfer_ratio = ntransfer / transfer_attempts * 100
@@ -722,7 +722,7 @@ if __name__ == '__main__':
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
     numSamples = [6500, 8000, 4000, 8000]
 
-    problem = 3
+    problem = 0
     problemtype = type[problem]
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
@@ -737,32 +737,32 @@ if __name__ == '__main__':
 
     # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
-    stdscr = curses.initscr()
-    curses.noecho()
-    curses.cbreak()
+    # stdscr = curses.initscr()
+    # curses.noecho()
+    # curses.cbreak()
 
     ntransferlist = []
 
     try:
         # stdscr.clear()
-        # targettraindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+        targettraindata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
         # targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+        # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=',')
 
         traindata = []
         testdata = []
         for i in range(numSources[problem]):
-            # traindata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
+            traindata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
+            testdata.append(np.genfromtxt('../../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
             # testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
-            traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+            # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
@@ -786,7 +786,7 @@ if __name__ == '__main__':
         mcmc_task.plot_rmse(problem_name)
 
     finally:
-        curses.echo()
-        curses.nocbreak()
-        curses.endwin()
+        # curses.echo()
+        # curses.nocbreak()
+        # curses.endwin()
         pass
