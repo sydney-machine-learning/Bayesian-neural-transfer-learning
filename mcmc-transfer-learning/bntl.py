@@ -693,6 +693,18 @@ class TransferLearningMCMC(object):
 
         burnin = int(0.1 * self.samples)
 
+        for index in range(self.numSources):
+            ax = plt.subplot(111)
+            x = np.array(np.arange(burnin, self.samples))
+            plt.plot(x, self.rmse_train[burnin: , index], '.' , label="train")
+            plt.plot(x, self.rmse_test[burnin: , index], '.' , label="test")
+            plt.legend()
+            plt.xlabel('Samples')
+            plt.ylabel('RMSE')
+            plt.title(dataset+' Source '+str(index+1)+' RMSE')
+            plt.savefig(self.directory+'/results/rmse-source-'+str(index+1)+'.png')
+            plt.clf()
+
         ax = plt.subplot(111)
         x = np.array(np.arange(burnin, self.samples))
         plt.plot(x, self.rmse_target_train[burnin: ], '.' , label="no-transfer")
@@ -701,7 +713,7 @@ class TransferLearningMCMC(object):
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' Train RMSE')
-        plt.savefig(self.directory+'/results/rmse-'+dataset+'train-mcmc.png')
+        plt.savefig(self.directory+'/results/rmse-target-train-mcmc.png')
         plt.clf()
 
 
@@ -712,7 +724,7 @@ class TransferLearningMCMC(object):
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
         plt.title(dataset+' Test RMSE')
-        plt.savefig(self.directory+'/results/rmse-'+dataset+'test-mcmc.png')
+        plt.savefig(self.directory+'/results/rmse-target-test-mcmc.png')
         plt.clf()
 # ------------------------------------------------------- Main --------------------------------------------------------
 
@@ -724,9 +736,9 @@ if __name__ == '__main__':
     output = [10, 2, 1, 1]
     numSources = [1, 3, 1, 5]
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
-    numSamples = [6500, 8000, 4000, 8000]
+    numSamples = [6500, 6000, 4000, 8000]
 
-    problem = 0
+    problem = 1
     problemtype = type[problem]
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
@@ -735,7 +747,6 @@ if __name__ == '__main__':
 
     #--------------------------------------------- Train for the source task -------------------------------------------
 
-    # print(np.around(np.linspace(0.005, 0.1, 20), decimals=3))
     stdscr = None
     stdscr = curses.initscr()
     curses.noecho()
@@ -745,26 +756,26 @@ if __name__ == '__main__':
 
     try:
         # stdscr.clear()
-        targettraindata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
-        targettestdata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-        # targettraindata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        # targettestdata = np.genfromtxt('../../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        # targettraindata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+        # targettestdata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+        targettraindata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        targettestdata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
         # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
-        # targettraindata = np.genfromtxt('../../datasets/Sarcos/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
+        # targettestdata = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
 
         traindata = []
         testdata = []
         for i in range(numSources[problem]):
-            traindata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
-            testdata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
-            # traindata.append(np.genfromtxt('../../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
-            # testdata.append(np.genfromtxt('../../datasets/UJIndoorLoc/targetData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
+            # traindata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
+            # testdata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
+            traindata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
+            testdata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
             # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
-            # traindata.append(np.genfromtxt('../../datasets/Sarcos/source.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/Sarcos/target_test.csv', delimiter=','))
+            # traindata.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
+            # testdata.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
 
         # stdscr.clear()
