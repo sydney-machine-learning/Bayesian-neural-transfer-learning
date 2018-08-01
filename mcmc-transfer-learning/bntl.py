@@ -487,9 +487,9 @@ class TransferLearningMCMC(object):
         transfer_attempts = 0
 
         for index in range(self.numSources):
-            w_save[index] = w[index, -1]
-        w_save[self.numSources] = w_target[-1]
-        w_save[self.numSources+1] = w_target_trf[-1]
+            w_save[index] = w[index, 1]
+        w_save[self.numSources] = w_target[1]
+        w_save[self.numSources+1] = w_target_trf[1]
 
         prior_prop = np.zeros((self.numSources))
         quantum = int( quantum_coeff * self.samples )
@@ -535,7 +535,7 @@ class TransferLearningMCMC(object):
             if save_knowledge:
                 np.savetxt(trainrmsefile, [rmsetrain_sample])
                 np.savetxt(testrmsefile, [rmsetest_sample])
-                w_save[:self.numSources] = w[:, -1]
+                w_save[:self.numSources] = w[:, 1]
 
             # Check MH-acceptance probability for target task
             accept, rmse_train_target, rmse_test_target, likelihood_target, prior_target = self.accept_prob(self.target,
@@ -551,7 +551,7 @@ class TransferLearningMCMC(object):
             if save_knowledge:
                 np.savetxt(targettrainrmsefile, [rmsetargettrain_prev])
                 np.savetxt(targettestrmsefile, [rmsetargettest_prev])
-                w_save[self.numSources] = w_target[-1]
+                w_save[self.numSources] = w_target[1]
 
 
             # If transfer is True, evaluate proposal for target task with transfer
@@ -593,7 +593,7 @@ class TransferLearningMCMC(object):
                 if save_knowledge:
                     np.savetxt(targettrftrainrmsefile, [rmsetargettrftrain_prev])
                     np.savetxt(targettrftestrmsefile, [rmsetargettrftest_prev])
-                    w_save[self.numSources + 1] = w_target_trf[-1]
+                    w_save[self.numSources + 1] = w_target_trf[1]
                     np.savetxt(weights_file, [w_save], delimiter=',')
 
             elapsed = convert_time(time.time() - start)
@@ -738,7 +738,7 @@ if __name__ == '__main__':
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
     numSamples = [6500, 6000, 4000, 8000]
 
-    problem = 1
+    problem = 3
     problemtype = type[problem]
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
@@ -758,10 +758,10 @@ if __name__ == '__main__':
         # stdscr.clear()
         # targettraindata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-        targettraindata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        targettestdata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        # targettestdata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        targettraindata = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
 
@@ -770,10 +770,10 @@ if __name__ == '__main__':
         for i in range(numSources[problem]):
             # traindata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
-            traindata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
-            # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+            # traindata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
+            # testdata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
+            traindata.append(np.genfromtxt('../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            testdata.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
