@@ -54,8 +54,8 @@ class Network(object):
     @staticmethod
     def sigmoid(x):
         x = x.astype(np.float128)
-        return 1 / (1 + np.exp(-x))
-
+        sig =  1 / (1 + np.exp(-x))
+        return sig
     def sampleEr(self, actualout):
         error = np.subtract(self.out, actualout)
         sqerror = np.sum(np.square(error)) / self.Top[2]
@@ -149,8 +149,9 @@ class Network(object):
         Input = np.zeros((1, self.Top[0]))  # temp hold input
         Desired = np.zeros((1, self.Top[2]))
 
-        batch_size = min(100, size)
-        indices = np.random.uniform(0, size, batch_size).astype('int')
+        batch_size = min(10, size)
+        indices = np.random.randint(0, size, batch_size)
+        # print(indices)
 
         for index in range(0, batch_size):
             pat = indices[index]
@@ -538,10 +539,13 @@ class TransferLearningMCMC(object):
         last_transfer_rmse = 0
         source_index = None
         w_gd = np.zeros((self.numSources, self.wsize))
+        w_prop_gd = np.zeros((self.numSources, self.wsize))
 
         for sample in range(self.samples - 1):
             for index in range(self.numSources):
+                print("start")
                 w_gd[index] = self.sources[index].langevin_gradient(self.traindata[index], w[index].copy(), self.sgd_depth)
+                print("Done")
                 w_proposal[index] = w_gd[index] + np.random.normal(0, self.step_w, self.wsize)
                 w_prop_gd[index] = self.sources[index].langevin_gradient(self.traindata[index], w_proposal[index].copy(), self.sgd_depth)
 
@@ -555,17 +559,16 @@ class TransferLearningMCMC(object):
             tau_pro = np.exp(eta_pro)
             tau_pro_target = np.exp(eta_pro_target)
 
-            if sample % quantum != 0:
-                w_target_trf_gd = self.target.langevin_gradient(self.targettraindata, w_target_trf.copy(), self.sgd_depth)
-                w_target_pro_trf = w_target_trf_gd + np.random.normal(0, self.step_w, self.wsize_target)
-                w_target_pro_trf_gd = self.target.langevin_gradient(self.targettraindata, w_target_pro_trf.copy(), self.sgd_depth)
-                eta_pro_target_trf = eta_target_trf + np.random.normal(0, self.step_eta, 1)
-                tau_pro_target_trf = np.exp(eta_pro_target_trf)
+            w_target_trf_gd = self.target.langevin_gradient(self.targettraindata, w_target_trf.copy(), self.sgd_depth)
+            w_target_pro_trf = w_target_trf_gd + np.random.normal(0, self.step_w, self.wsize_target)
+            w_target_pro_trf_gd = self.target.langevin_gradient(self.targettraindata, w_target_pro_trf.copy(), self.sgd_depth)
+            eta_pro_target_trf = eta_target_trf + np.random.normal(0, self.step_eta, 1)
+            tau_pro_target_trf = np.exp(eta_pro_target_trf)
 
 
             # Check MH-acceptance probability for all source tasks
             for index in range(self.numSources):
-                accept, rmsetrain[index], rmsetest[index], likelihood[index], prior[index] = self.accept_prob(self.sources[index],self.traindata[index], self.testdata[index], w_[index], w_gd[index], w_proposal[index], w_prop_gd[index], tau_pro[index],likelihood[index], prior[index])
+                accept, rmsetrain[index], rmsetest[index], likelihood[index], prior[index] = self.accept_prob(self.sources[index],self.traindata[index], self.testdata[index], w[index], w_gd[index], w_proposal[index], w_prop_gd[index], tau_pro[index],likelihood[index], prior[index])
                 if accept:
                     naccept[index] += 1
                     w[index] = w_proposal[index]
@@ -636,13 +639,13 @@ class TransferLearningMCMC(object):
                     np.savetxt(weights_file, [w_save], delimiter=',')
 
             elapsed = convert_time(time.time() - start)
-            self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
+            # self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
 
         accept_ratio_target = np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100
         elapsed = time.time() - start
-        stdscr.clear()
-        stdscr.refresh()
-        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
+        # stdscr.clear()
+        # stdscr.refresh()
+        # stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
 
         accept_ratio = naccept / (self.samples * 1.0) * 100
         transfer_ratio = ntransfer / transfer_attempts * 100
@@ -787,9 +790,9 @@ if __name__ == '__main__':
     #--------------------------------------------- Train for the source task -------------------------------------------
 
     stdscr = None
-    stdscr = curses.initscr()
-    curses.noecho()
-    curses.cbreak()
+    # stdscr = curses.initscr()
+    # curses.noecho()
+    # curses.cbreak()
 
     ntransferlist = []
 
@@ -836,7 +839,7 @@ if __name__ == '__main__':
         mcmc_task.plot_rmse(problem_name)
 
     finally:
-        curses.echo()
-        curses.nocbreak()
-        curses.endwin()
+        # curses.echo()
+        # curses.nocbreak()
+        # curses.endwin()
         pass
