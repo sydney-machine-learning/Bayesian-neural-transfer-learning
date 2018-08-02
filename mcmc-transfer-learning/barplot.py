@@ -47,7 +47,7 @@ plt.bar(index + float(bar_width)/2 + bar_width, train_rmse_mh, bar_width,
                 error_kw = dict(elinewidth=1, ecolor='C9', capsize=capsize),
                 color = 'C2',
                 yerr = train_std_mh,
-                label = 'Train TL')
+                label = 'Train BNTL')
 
 
 
@@ -65,7 +65,7 @@ plt.bar(index + float(bar_width)/2 + 3 * bar_width , test_rmse_mh, bar_width,
                 error_kw = dict(elinewidth=1, ecolor='C9', capsize=capsize),
                 color = 'C4',
                 yerr = test_std_mh,
-                label = 'Test TL')
+                label = 'Test BNTL')
 
 plt.xlabel('Datasets')
 plt.ylabel('RMSE')
