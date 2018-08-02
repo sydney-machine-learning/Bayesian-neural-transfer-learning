@@ -242,7 +242,7 @@ class TransferLearningMCMC(object):
         diagmat_size = min(size, x.shape[0])
         sigma_diagmat = np.zeros((diagmat_size, diagmat_size))
         np.fill_diagonal(sigma_diagmat, sigma)
-        indices = np.random.uniform(0, x.shape[0], diagmat_size).astype('int')
+        indices = np.random.randint(0, x.shape[0], diagmat_size)
         x_mean = np.zeros(diagmat_size)
         x_val = np.zeros(diagmat_size)
         for i in range(diagmat_size):
@@ -354,29 +354,14 @@ class TransferLearningMCMC(object):
         diff_likelihood = likelihood_proposal - likelihood
         diff_prior = prior_prop - prior
 
-        # diagmat_size = min(500, w_current.shape[0])
-        # # diagmat_size = int(0.01 * w_current.shape[0])
-        # sigma_diagmat = np.zeros((diagmat_size, diagmat_size))
-        # np.fill_diagonal(sigma_diagmat, 0.02)
-        #
-        # w_source_mean = np.zeros(diagmat_size)
-        # w_pres_mean = np.zeros(diagmat_size)
-        # w_proposal = np.zeros(diagmat_size)
-        #
-        # indices = np.random.uniform(0, w_current.shape[0], diagmat_size).astype('int')
-        # for i in range(diagmat_size):
-        #     index = indices[i]
-        #     w_source_mean[i] = w_source[index].copy()
-        #     w_proposal[i] = w_prop[index].copy()
-        #     w_pres_mean[i] = w_current[index].copy()
-
         trans_dist_prop = self.log_multivariate_normal(x=w_current, mean=w_prop_gd, sigma=self.sigma)
         trans_dist_curr = self.log_multivariate_normal(x=w_proposal, mean=w_current_gd, sigma=self.sigma)
 
         transfer_diff = trans_dist_prop - trans_dist_curr
+        diff = diff_likelihood + diff_prior + transfer_diff
+        diff = diff.astype('float128')
+        mh_transfer_prob = min(1, np.exp(diff))
 
-        diff = min(700, diff_likelihood + diff_prior + transfer_diff)
-        mh_transfer_prob = min(1, math.exp(diff))
         u = random.uniform(0, 1)
         if u < mh_transfer_prob:
             accept = True
@@ -398,8 +383,9 @@ class TransferLearningMCMC(object):
         diff_q = _q - q
         diff_likelihood = likelihood_proposal - likelihood
         diff_prior = prior_prop - prior
-        diff = min(700, diff_likelihood + diff_prior + diff_q)
-        mh_prob = min(1, math.exp(diff))
+        diff = diff_likelihood + diff_prior + diff_q
+        diff = diff.astype('float128')
+        mh_prob = min(1, np.exp(diff))
         u = random.uniform(0, 1)
         if u < mh_prob:
             accept = True
@@ -543,9 +529,7 @@ class TransferLearningMCMC(object):
 
         for sample in range(self.samples - 1):
             for index in range(self.numSources):
-                print("start")
                 w_gd[index] = self.sources[index].langevin_gradient(self.traindata[index], w[index].copy(), self.sgd_depth)
-                print("Done")
                 w_proposal[index] = w_gd[index] + np.random.normal(0, self.step_w, self.wsize)
                 w_prop_gd[index] = self.sources[index].langevin_gradient(self.traindata[index], w_proposal[index].copy(), self.sgd_depth)
 
@@ -639,13 +623,13 @@ class TransferLearningMCMC(object):
                     np.savetxt(weights_file, [w_save], delimiter=',')
 
             elapsed = convert_time(time.time() - start)
-            # self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
+            self.report_progress(stdscr, sample, elapsed, rmsetrain_sample, rmsetest_sample, rmsetargettrain_prev, rmsetargettest_prev, rmsetargettrftrain_prev, rmsetargettrftest_prev, last_transfer, last_transfer_rmse, source_index, accept_target_trf)
 
         accept_ratio_target = np.array([naccept_target, naccept_target_trf]) / float(self.samples) * 100
         elapsed = time.time() - start
-        # stdscr.clear()
-        # stdscr.refresh()
-        # stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
+        stdscr.clear()
+        stdscr.refresh()
+        stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed))
 
         accept_ratio = naccept / (self.samples * 1.0) * 100
         transfer_ratio = ntransfer / transfer_attempts * 100
@@ -778,7 +762,7 @@ if __name__ == '__main__':
     output = [10, 2, 1, 1]
     numSources = [1, 1, 1, 5]
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
-    numSamples = [8000, 10000, 4000, 8000]
+    numSamples = [8000, 4000, 4000, 8000]
 
     problem = 1
     problemtype = type[problem]
@@ -790,9 +774,9 @@ if __name__ == '__main__':
     #--------------------------------------------- Train for the source task -------------------------------------------
 
     stdscr = None
-    # stdscr = curses.initscr()
-    # curses.noecho()
-    # curses.cbreak()
+    stdscr = curses.initscr()
+    curses.noecho()
+    curses.cbreak()
 
     ntransferlist = []
 
@@ -830,16 +814,17 @@ if __name__ == '__main__':
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
         # start sampling
-        accept_ratio, transfer_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.005)
+        accept_ratio, transfer_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.01)
 
-        # display train and test accuracies
+        # display trai
+            # testdata.append(np.genn and test accuracies
         mcmc_task.display_rmse()
 
         # Plot the accuracies and rmse
         mcmc_task.plot_rmse(problem_name)
 
     finally:
-        # curses.echo()
-        # curses.nocbreak()
-        # curses.endwin()
+        curses.echo()
+        curses.nocbreak()
+        curses.endwin()
         pass
