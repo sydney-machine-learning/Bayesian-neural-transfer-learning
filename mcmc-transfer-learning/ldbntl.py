@@ -355,7 +355,7 @@ class TransferLearningMCMC(object):
         diff_prior = prior_prop - prior
 
         trans_dist_prop = self.log_multivariate_normal(x=w_current, mean=w_prop_gd, sigma=self.sigma)
-        trans_dist_curr = self.log_multivariate_normal(x=w_proposal, mean=w_current_gd, sigma=self.sigma)
+        trans_dist_curr = self.log_multivariate_normal(x=w_prop, mean=w_current_gd, sigma=self.sigma)
 
         transfer_diff = trans_dist_prop - trans_dist_curr
         diff = diff_likelihood + diff_prior + transfer_diff
@@ -764,7 +764,7 @@ if __name__ == '__main__':
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
     numSamples = [8000, 4000, 4000, 8000]
 
-    problem = 1
+    problem = 3
     problemtype = type[problem]
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
@@ -784,10 +784,10 @@ if __name__ == '__main__':
         # stdscr.clear()
         # targettraindata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-        targettraindata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        targettestdata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        # targettraindata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        # targettestdata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        targettraindata = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
+        targettestdata = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
         # targettraindata = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
         # targettestdata = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
 
@@ -796,10 +796,10 @@ if __name__ == '__main__':
         for i in range(numSources[problem]):
             # traindata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
-            traindata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
-            # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+            # traindata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
+            # testdata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
+            traindata.append(np.genfromtxt('../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            testdata.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
             # traindata.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
             # testdata.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
@@ -814,7 +814,7 @@ if __name__ == '__main__':
         w_random_target = np.random.randn(mcmc_task.wsize_target)
 
         # start sampling
-        accept_ratio, transfer_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.01)
+        accept_ratio, transfer_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.005)
 
         # display trai
             # testdata.append(np.genn and test accuracies
