@@ -331,7 +331,7 @@ class TransferLearningMCMC(object):
 
         index =  np.random.uniform(2, self.numSources, 1).astype('int')
         source_proposal = weights[index][0]
-        source_proposal_gd = weights[self.numSources + index][0]
+        source_proposal_gd = self.target.langevin_gradient(self.targettraindata, source_proposal, self.sgd_depth)
 
         tau = np.exp(eta[self.numSources + index])
         sampleaccept, rmsetrain, rmsetest, likelihood, prior = self.transfer_prob(self.target, self.targettraindata, self.targettestdata, w_transfer, w_transfer_gd, source_proposal, source_proposal_gd, tau, likelihood, prior)
@@ -593,7 +593,7 @@ class TransferLearningMCMC(object):
                     transfer_attempts += 1
                     last_transfer = sample
                     if transfer == 'mh':
-                        w_sample = np.vstack([w_target_trf, w_target_trf_gd, w_proposal, w_prop_gd])
+                        w_sample = np.vstack([w_target_trf, w_target_trf_gd, w_proposal])
                         eta = eta.reshape((self.numSources,1))
                         eta_pro = eta_pro.reshape((self.numSources,1))
                         eta_sample = np.vstack([eta_target_trf, eta, eta_pro])
