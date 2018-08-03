@@ -126,7 +126,6 @@ class Network(object):
         return data
 
     def evaluate_proposal(self, data, w ):  # BP with SGD (Stocastic BP)
-
         self.decode(w)  # method to decode w into W1, W2, B1, B2.
         size = data.shape[0]
 
@@ -149,7 +148,7 @@ class Network(object):
         Input = np.zeros((1, self.Top[0]))  # temp hold input
         Desired = np.zeros((1, self.Top[2]))
 
-        batch_size = min(10, size)
+        batch_size = min(1000, size)
         indices = np.random.randint(0, size, batch_size)
         # print(indices)
 
@@ -329,7 +328,7 @@ class TransferLearningMCMC(object):
         eta_transfer = eta[0]
         accept = False
 
-        index =  np.random.uniform(2, self.numSources, 1).astype('int')
+        index =  np.random.randint(2, self.numSources, 1)
         source_proposal = weights[index][0]
         source_proposal_gd = self.target.langevin_gradient(self.targettraindata, source_proposal, self.sgd_depth)
 
