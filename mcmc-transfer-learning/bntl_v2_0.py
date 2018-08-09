@@ -16,14 +16,9 @@ import curses
 
 class Network(object):
 
-    def __init__(self, Topo, Train, Test, learn_rate = 0.5, alpha = 0.1):
+    def __init__(self, Topo, learn_rate = 0.5, alpha = 0.1):
         self.Top = Topo  # NN topology [input, hidden, output]
-        self.TrainData = Train
-        self.TestData = Test
         np.random.seed(int(time.time()))
-        self.lrate = learn_rate
-        self.alpha = alpha
-
         self.W1 = np.random.randn(self.Top[0], self.Top[1]) / np.sqrt(self.Top[0])
         self.B1 = np.random.randn(1, self.Top[1]) / np.sqrt(self.Top[1])  # bias first layer
         self.W2 = np.random.randn(self.Top[1], self.Top[2]) / np.sqrt(self.Top[1])
@@ -56,7 +51,6 @@ class Network(object):
     def BackwardPass(self, Input, desired):
         out_delta = (desired - self.out) * (self.out * (1 - self.out))
         hid_delta = out_delta.dot(self.W2.T) * (self.hidout * (1 - self.hidout))
-
         self.W2 += (self.hidout.T.dot(out_delta) * self.lrate)
         self.B2 += (-1 * self.lrate * out_delta)
         self.W1 += (Input.T.dot(hid_delta) * self.lrate)
@@ -65,14 +59,10 @@ class Network(object):
     def decode(self, w):
         w_layer1size = self.Top[0] * self.Top[1]
         w_layer2size = self.Top[1] * self.Top[2]
-
         w_layer1 = w[0:w_layer1size]
         self.W1 = np.reshape(w_layer1, (self.Top[0], self.Top[1]))
-
         w_layer2 = w[w_layer1size:w_layer1size + w_layer2size]
         self.W2 = np.reshape(w_layer2, (self.Top[1], self.Top[2]))
-
-
         self.B1 = w[w_layer1size + w_layer2size :w_layer1size + w_layer2size + self.Top[1]]
         self.B2 = w[w_layer1size + w_layer2size + self.Top[1] :w_layer1size + w_layer2size + self.Top[1] + self.Top[2]]
 
@@ -84,7 +74,7 @@ class Network(object):
         return w
 
     @staticmethod
-    def scaler(data, maxout=1, minout=0, maxin=1, minin=0):
+    def scale_data(data, maxout=1, minout=0, maxin=1, minin=0):
         attribute = data[:]
         attribute = minout + (attribute - minin)*((maxout - minout)/(maxin - minin))
         return attribute
@@ -94,25 +84,9 @@ class Network(object):
         for i in range(len(indices)):
             index = indices[i]
             attribute = data[:, index]
-            attribute = Network.scaler(attribute, maxout=maxval[i], minout=minval[i], maxin=1, minin=0)
+            attribute = Network.scale_data(attribute, maxout=maxval[i], minout=minval[i], maxin=1, minin=0)
             data[:, index] = attribute
         return data
-
-    def evaluate_proposal(self, data, w):  # BP with SGD (Stocastic BP)
-
-        self.decode(w)  # method to decode w into W1, W2, B1, B2.
-        size = data.shape[0]
-
-        Input = np.zeros((1, self.Top[0]))  # temp hold input
-        Desired = np.zeros((1, self.Top[2]))
-        fx = np.zeros((size,self.Top[2]))
-
-        for i in range(0, size):  # to see what fx is produced by your current weight update
-            Input = data[i, 0:self.Top[0]]
-            self.ForwardPass(Input)
-            fx[i] = self.out
-
-        return fx
 
     @staticmethod
     def softmax(fx):
@@ -122,48 +96,38 @@ class Network(object):
         prob = np.divide(ex, sum_ex)
         return prob
 
-# ------------------------------------------------------- MCMC Class --------------------------------------------------
+    def evaluate_proposal(self, data, w):  # BP with SGD (Stocastic BP)
+        self.decode(w)  # method to decode w into W1, W2, B1, B2.
+        size = data.shape[0]
+        Input = np.zeros((1, self.Top[0]))  # temp hold input
+        Desired = np.zeros((1, self.Top[2]))
+        fx = np.zeros((size,self.Top[2]))
+        for i in range(0, size):  # to see what fx is produced by your current weight update
+            Input = data[i, 0:self.Top[0]]
+            self.ForwardPass(Input)
+            fx[i] = self.out
+        return fx
+
+
+# ---------------------------------------------- Bayesian Transfer Learning Class ------------------------------------------------
 class BayesianTL(object):
-    def __init__(self, num_samples, num_sources, source_train_data, source_test_data, target_train_data, target_test_data, topology, directory, type='regression'):
-        self.num_samples = num_samples  # NN topology [input, hidden, output]
-        self.source_topology = topology  # max epocs
+    def __init__(self, num_samples, num_sources, source_train_data, source_test_data, target_train_data, target_test_data, topology, directory, problem_type='regression'):
+        self.num_samples = num_samples
+        self.topology = topology
         self.source_train_data = source_train_data  #
         self.source_test_data = source_test_data
         self.target_train_data = target_train_data
         self.target_test_data = target_test_data
         self.num_sources = num_sources
-        self.type = type
+        self.problem_type = problem_type
         self.directory = directory
-        # Create file objects to write the attributes of the samples
         self.source_wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
-        self.create_networks()
+        self.neural_network = Network(topology)
         self.join_data()
-        self.target_wsize = (self.target_topology[0] * self.target_topology[1]) + (self.target_topology[1] * self.target_topology[2]) + self.target_topology[1] + self.target_topology[2]
+        self.initialize_mu()
+        self.create_directory(self.directory)
 
-        # ----------------
-
-    def joint_prior_distribution(self, mu, weights):
-        loss = np.sum(np.log(1/( 1 +  np.square((weights - mu)))))
-        return loss
-
-    def evidence():
-        pass
-
-
-    def join_data(self):
-        train_data = self.target_train_data
-        test_data = self.target_test_data
-        for index in range(self.num_sources):
-            train_data = np.vstack([train_data, self.source_train_data[index]])
-            test_data = np.vstack([test_data, self.source_test_data[index]])
-        self.joint_train_data = train_data
-        self.joint_test_data = test_data
-
-    @staticmethod
-    def create_directory(directory):
-        if not os.path.isdir(directory):
-            os.mkdir(directory)
-
+    # ----------------------------------------------------------------------------------------------------------------------------
     @staticmethod
     def convert_time(secs):
         if secs >= 60:
@@ -172,41 +136,24 @@ class BayesianTL(object):
         else:
             secs = str(int(secs))
             mins = str(00)
-
         if len(mins) == 1:
             mins = '0'+mins
-
         if len(secs) == 1:
             secs = '0'+secs
-
         return [mins, secs]
 
-    def report_progress(self, stdscr, sample_count, elapsed, rmse_train_source, rmse_test_source, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer_sample, last_transfer_rmse, source_index, last_transfer_accepted):
-        stdscr.addstr(0, 0, "{} Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(self.directory, sample_count, self.num_samples, elapsed[0], elapsed[1]))
-        i = 2
-        index = 0
-        for index in range(0, self.num_sources):
-            stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index + 1))
-            stdscr.addstr(index + i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_source[index], rmse_test_source[index]))
-            i += 2
+    @staticmethod
+    def joint_prior_density(weights, mu, nu_squared):
+        n = phi.shape[0]
+        part_1 = -np.sum(np.square(phi - mu)) / (2 * nu_squared)
+        part_2 = -n/2 * np.log(2*np.pi*nu_squared)
+        loss = np.sum(np.log( 1 / (1 +  np.square((weights - mu))))) + part_1 + part_2
+        return loss
 
-        i = index + i + 2
-        stdscr.addstr(i, 3, "Target w/o transfer Progress:")
-        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target, rmse_test_target))
-
-        i += 4
-        stdscr.addstr(i, 3, "Target w/ transfer Progress:")
-        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
-        stdscr.addstr(i + 2, 5, "Last transfer attempt: {} Last transfered rmse: {:.4f} Source index: {} Last transfer accepted: {} ".format(last_transfer_sample, last_transfer_rmse, source_index, last_transfer_accepted))
-        stdscr.refresh()
-
-    def create_networks(self):
-        self.sources = []
-        for index in range(self.num_sources):
-            self.sources.append(Network(self.source_topology, self.source_train_data[index], self.source_test_data[index]))
-        self.target_topology = self.source_topology.copy()
-        self.target_topology[1] = int(1.0 * self.source_topology[1])
-        self.target = Network(self.target_topology, self.target_train_data, self.target_test_data)
+    @staticmethod
+    def create_directory(directory):
+        if not os.path.isdir(directory):
+            os.mkdir(directory)
 
     @staticmethod
     def calculate_rmse(predictions, desired):
@@ -222,6 +169,51 @@ class BayesianTL(object):
         distance = np.sqrt(np.sum(np.square(prediction - desired), axis=1)).mean()
         return distance
 
+    @staticmethod
+    def multinomial_likelihood(neural_network, data, weights):
+        y = data[:, neural_network.Top[0]: neural_network.top[2]]
+        fx = neuralnet.evaluate_proposal(data, weights)
+        rmse = self.calculate_rmse(fx, y) # Can be replaced by calculate_nmse function for reporting NMSE
+        probability = neural_network.softmax(fx)
+        loss = 0
+        for index_1 in range(y.shape[0]):
+            for index_2 in range(y.shape[1]):
+                if y[index_1, index_2] == 1:
+                    loss += np.log(probability[index_1, index_2])
+        out = np.argmax(fx, axis=1)
+        y_out = np.argmax(y, axis=1)
+        count = 0
+        for index in range(y_out.shape[0]):
+            if out[index] == y_out[index]:
+                count += 1
+        accuracy = float(count)/y_out.shape[0] * 100
+        return [loss, rmse, accuracy]
+
+    @staticmethod
+    def classification_prior(sigma_squared, weights):
+        part1 = -1 * ((weights.shape[0]) / 2) * np.log(sigma_squared)
+        part2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
+        log_loss = part1 - part2
+        return log_loss
+
+    @staticmethod
+    def gaussian_likelihood(neural_network, data, weights, tausq):
+        desired = data[:, neural_network.Top[0]: neural_network.Top[0] + neural_network.Top[2]]
+        prediction = neural_network.evaluate_proposal(data, weights)
+        # y_m = data[:, 522:524]
+        # fx_m = Network.denormalize(fx.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
+        # y_m = Network.denormalize(y.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
+        # rmse = self.distance(fx_m, y_m)
+        rmse = BayesianTL.calculate_rmse(prediction, desired)
+        loss = -0.5 * np.log(2 * np.pi * tausq) - 0.5 * np.square(desired - prediction) / tausq
+        return [np.sum(loss), rmse]
+
+    @staticmethod
+    def gaussian_prior(sigma_squared, nu_1, nu_2, weights, tausq):
+        part1 = -1 * (weights.shape[0] / 2) * np.log(sigma_squared)
+        part2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
+        log_loss = part1 - part2 - (1 + nu_1) * np.log(tausq) - (nu_2 / tausq)
+        return log_loss
 
     def likelihood_function(self, neural_network, data, weights, tau):
         if self.type == 'regression':
@@ -237,143 +229,49 @@ class BayesianTL(object):
             loss = self.classification_prior(self.sigma_squared, weights)
         return loss
 
-    @staticmethod
-    def multinomial_likelihood(neural_network, data, weights):
-        y = data[:, neural_network.Top[0]: neural_network.top[2]]
-        fx = neuralnet.evaluate_proposal(data, weights)
-        rmse = self.calculate_rmse(fx, y) # Can be replaced by calculate_nmse function for reporting NMSE
-        probability = neural_network.softmax(fx)
-        loss = 0
-        for index_1 in range(y.shape[0]):
-            for index_2 in range(y.shape[1]):
-                if y[index_1, index_2] == 1:
-                    loss += np.log(probability[index_1, index_2] + 0.0001)
+    def report_progress(self, stdscr, sample_count, elapsed, rmse_train_source, rmse_test_source, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer_sample, last_transfer_rmse, source_index, last_transfer_accepted):
+        stdscr.addstr(0, 0, "{} Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(self.directory, sample_count, self.num_samples, elapsed[0], elapsed[1]))
+        i = 2
+        index = 0
+        for index in range(0, self.num_sources):
+            stdscr.addstr(index + i, 3, "Source {0} Progress:".format(index + 1))
+            stdscr.addstr(index + i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_source[index], rmse_test_source[index]))
+            i += 2
+        i = index + i + 2
+        stdscr.addstr(i, 3, "Target w/o transfer Progress:")
+        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target, rmse_test_target))
+        i += 4
+        stdscr.addstr(i, 3, "Target w/ transfer Progress:")
+        stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
+        stdscr.addstr(i + 2, 5, "Last transfer attempt: {} Last transfered rmse: {:.4f} Source index: {} Last transfer accepted: {} ".format(last_transfer_sample, last_transfer_rmse, source_index, last_transfer_accepted))
+        stdscr.refresh()
 
-        out = np.argmax(fx, axis=1)
-        y_out = np.argmax(y, axis=1)
-        count = 0
-        for index in range(y_out.shape[0]):
-            if out[index] == y_out[index]:
-                count += 1
-        accuracy = float(count)/y_out.shape[0] * 100
-        return [loss, rmse, accuracy]
+    def join_data(self):
+        train_data = self.target_train_data
+        test_data = self.target_test_data
+        for index in range(self.num_sources):
+            train_data = np.vstack([train_data, self.source_train_data[index]])
+            test_data = np.vstack([test_data, self.source_test_data[index]])
+        self.joint_train_data = train_data
+        self.joint_test_data = test_data
 
-    @staticmethod
-    def classification_prior(sigma_squared, weights):
-        # h = self.topology[1]  # number hidden neurons
-        # d = self.topology[0]  # number input neurons
-        part1 = -1 * ((weights.shape[0]) / 2) * np.log(sigma_squared)
-        part2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
-        log_loss = part1 - part2
-        return log_loss
-
-    @staticmethod
-    def gaussian_likelihood(neural_network, data, weights, tausq):
-        desired = data[:, neural_network.Top[0]: neural_network.Top[0] + neural_network.Top[2]]
-        # y_m = data[:, 522:524]
-        prediction = neural_network.evaluate_proposal(data, weights)
-        # fx_m = Network.denormalize(fx.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
-        # y_m = Network.denormalize(y.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
-        # np.savetxt('y.txt', y, delimiter=',')
-        # rmse = self.distance(fx_m, y_m)
-        rmse = BayesianTL.calculate_rmse(prediction, desired)
-        loss = -0.5 * np.log(2 * np.pi * tausq) - 0.5 * np.square(desired - prediction) / tausq
-        return [np.sum(loss), rmse]
-
-    @staticmethod
-    def gaussian_prior(sigma_squared, nu_1, nu_2, weights, tausq):
-        part1 = -1 * (weights.shape[0] / 2) * np.log(sigma_squared)
-        part2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
-        log_loss = part1 - part2 - (1 + nu_1) * np.log(tausq) - (nu_2 / tausq)
-        return log_loss
-
-    def generate_weights(self, w_mean, w_std):
-        w_proposal = np.ones(w_mean.shape)
-        for index in range(w_mean.shape[0]):
-            w_proposal[index] = np.random.normal(w_mean[index], w_std[index], 1)
-        return w_proposal
-
-    def transfer(self, weights, eta, likelihood, prior, target_rmse_train, target_rmse_test):
-        accept = False
-        target_weights_current = weights[0]
-        target_rmse_train_current = target_rmse_train
-        target_rmse_test_current = target_rmse_test
-        target_eta_current = eta[0]
-
-        index =  np.random.uniform(1, self.num_sources, 1).astype('int')
-        source_weights_current = weights[index][0]
-        source_weights_proposal = weights[self.num_sources + index][0]
-
-        eta_proposal = eta[self.num_sources + index]
-        tau_proposal = np.exp(eta_proposal)
-        sample_accept, target_rmse_train, target_rmse_test, likelihood, prior = self.evaluate_transfer(self.target, self.target_train_data, self.target_test_data, target_weights_current, source_weights_current, source_weights_proposal, tau_proposal, likelihood, prior)
-
-        if sample_accept:
-            target_weights_current = source_weights_proposal
-            target_eta_current = eta_proposal
-            target_rmse_train_current = target_rmse_train
-            target_rmse_test_current = target_rmse_test
-            accept = True
-
-        return likelihood, prior, target_weights_current, target_eta_current, target_rmse_train_current, target_rmse_test_current, accept, index
-
-
-    def evaluate_transfer(self, neural_network, train_data, test_data, target_weights_current, source_weights_current, source_weights_proposal, tau, likelihood, prior):
-        accept = False
-        [likelihood_proposal, rmse_train] = self.likelihood_function(neural_network, train_data, source_weights_proposal, tau)
-        [likelihood_ignore, rmse_test] = self.likelihood_function(neural_network, test_data, source_weights_proposal, tau)
-        prior_proposal = self.prior_function(source_weights_proposal, tau)
-        difference_likelihood = likelihood_proposal - likelihood
-        difference_prior = prior_proposal - prior
-
-        diagmat_size = min(500, target_weights_current.shape[0])
-        # diagmat_size = int(0.01 * w_current.shape[0])
-        sigma_diagmat = np.zeros((diagmat_size, diagmat_size))
-        np.fill_diagonal(sigma_diagmat, 0.02)
-
-        theta_source_current = np.zeros(diagmat_size)
-        theta_target_current = np.zeros(diagmat_size)
-        theta_source_proposal = np.zeros(diagmat_size)
-
-        indices = np.random.uniform(0, target_weights_current.shape[0], diagmat_size).astype('int')
-        for i in range(diagmat_size):
-            index = indices[i]
-            theta_source_current[i] = source_weights_current[index].copy()
-            theta_source_proposal[i] = source_weights_proposal[index].copy()
-            theta_target_current[i] = target_weights_current[index].copy()
-            i += 1
-
-        transfer_distribution_proposal = multivariate_normal.logpdf(theta_target_current, mean=theta_source_current, cov=sigma_diagmat)
-        transfer_distribution_current = multivariate_normal.logpdf(theta_source_proposal, mean=theta_target_current, cov=sigma_diagmat)
-
-        difference_transfer_distribution = transfer_distribution_proposal - transfer_distribution_current
-
-        difference_sum = min(700, difference_likelihood + difference_prior + difference_transfer_distribution)
-        mh_transfer_ratio = min(1, np.exp(difference_sum))
-        u = random.uniform(0, 1)
-        if u < mh_transfer_ratio:
-            accept = True
-            likelihood = likelihood_proposal
-            prior = prior_proposal
-
-        return accept, rmse_train, rmse_test, likelihood, prior
-
-
-    def acceptance_probability(self, neural_network, train_data, test_data, weights, tau, likelihood, prior):
-        accept = False
-        [likelihood_proposal, rmse_train] = self.likelihood_function(neural_network, train_data, weights, tau)
-        [likelihood_ignore, rmse_test] = self.likelihood_function(neural_network, test_data, weights, tau)
-        prior_proposal = self.prior_function(weights, tau)  # takes care of the gradients
-        difference_likelihood = likelihood_proposal - likelihood
-        difference_prior = prior_proposal - prior
-        difference_sum = min(700, difference_likelihood + difference_prior)
-        mh_ratio = min(1, np.exp(difference_sum))
-        u = random.uniform(0, 1)
-        if u < mh_ratio:
-            accept = True
-            likelihood = likelihood_proposal
-            prior = prior_proposal
-        return accept, rmse_train, rmse_test, likelihood, prior
+    def evaluate_proposal(self, neural_network, train_data, test_data, weights_proposal, tau_proposal, likelihood_current, prior_current, mu=None):
+            accept = False
+            likelihood_ignore, rmse_test_proposal = self.likelihood_function(neural_network, test_data, weights, tau)
+            likelihood_proposal, rmse_train_proposal = self.likelihood_function(neural_network, train_data, weights, tau)
+            if mu == None:
+                prior_proposal = self.prior_function(weights_proposal, tau_proposal)
+            else:
+                prior_proposal = self.joint_prior_distribution(weights_proposal, mu, self.nu_squared)
+            difference_likelihood = likelihood_proposal - likelihood_current
+            difference_prior = prior_proposal - prior_current
+            mh_ratio = min(1, np.exp(min(709, difference_likelihood + difference_prior)))
+            u = np.random.uniform(0,1)
+            if u < mh_ratio:
+                accept = True
+                likelihood_current = likelihood_proposal
+                prior_proposal = prior_current
+            return accept, rmse_train_proposal, rmse_test_proposal, likelihood_current, prior_current
 
     def mcmc_sampler(self, source_weights_initial, target_weights_initial, stdscr, save_knowledge=False, transfer=True, transfer_coefficient=0.01):
 
@@ -437,8 +335,6 @@ class BayesianTL(object):
             [source_likelihood[index], source_rmse_train[index]] = self.likelihood_function(self.sources[index], self.source_train_data[index], source_weights_current[index], source_tau_proposal[index])
             source_rmse_test[index] = self.calculate_rmse(source_prediction_test[index], source_y_test[index])
 
-
-        # pos_w = np.ones((self.samples, self.num_sources, self.wsize))  # posterior of all weights and bias over all samples
 
         target_train_size = self.target_train_data.shape[0]
         target_test_size = self.target_test_data.shape[0]
