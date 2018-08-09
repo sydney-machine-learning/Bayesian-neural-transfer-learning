@@ -145,9 +145,9 @@ class BayesianTL(object):
     @staticmethod
     def joint_prior_density(weights, mu, nu_squared):
         n = phi.shape[0]
-        part_1 = -np.sum(np.square(phi - mu)) / (2 * nu_squared)
-        part_2 = -n/2 * np.log(2*np.pi*nu_squared)
-        loss = np.sum(np.log( 1 / (1 +  np.square((weights - mu))))) + part_1 + part_2
+        part_1 = -np.sum(np.square(weights - mu)) / (2 * nu_squared)
+        part_2 = -n/2 * np.log(2 * np.pi * nu_squared)
+        loss = np.sum(np.log( 1 / (1 +  np.square((weights - mu))))) - part_1 - part_2
         return loss
 
     @staticmethod
