@@ -592,7 +592,7 @@ class BayesianTL(object):
         stdscr.addstr(0 ,0 , r"Sampling Done!, {} % samples were accepted, Total Time: {}".format(accept_ratio_target, elapsed_time))
 
         accept_ratio = source_num_accept / (self.num_samples * 1.0) * 100
-        transfer_ratio = ntransfer / transfer_attempts * 100
+        transfer_ratio = num_transfer_accepted / num_transfer_attempts * 100
 
         with open(self.directory+"/ratios.txt", 'w') as accept_ratios_file:
             for ratio in accept_ratio:
@@ -603,12 +603,12 @@ class BayesianTL(object):
 
 
         # Close the files
-        trainrmsefile.close()
-        testrmsefile.close()
-        targettrainrmsefile.close()
-        targettestrmsefile.close()
-        targettrftrainrmsefile.close()
-        targettrftestrmsefile.close()
+        source_train_rmse_file.close()
+        source_test_rmse_file.close()
+        target_train_rmse_file.close()
+        target_test_rmse_file.close()
+        target_trf_train_rmse_file.close()
+        target_trf_test_rmse_file.close()
         weights_file.close()
 
         return (accept_ratio, transfer_ratio)
@@ -616,20 +616,20 @@ class BayesianTL(object):
 
 
     def get_rmse(self):
-        self.rmse_train = np.genfromtxt(self.directory+'/trainrmse.csv')
-        self.rmse_test = np.genfromtxt(self.directory+'/testrmse.csv')
+        self.source_rmse_train = np.genfromtxt(self.directory+'/source_train_rmse.csv')
+        self.source_rmse_test = np.genfromtxt(self.directory+'/source_test_rmse.csv')
         if self.num_sources == 1:
-            self.rmse_test = self.rmse_test.reshape((self.rmse_test.shape[0], 1))
-            self.rmse_train = self.rmse_train.reshape((self.rmse_train.shape[0], 1))
-        self.rmse_target_train = np.genfromtxt(self.directory+'/targettrainrmse.csv')
-        self.rmse_target_test = np.genfromtxt(self.directory+'/targettestrmse.csv')
-        self.rmse_target_train_trf = np.genfromtxt(self.directory+'/targettrftrainrmse.csv')
-        self.rmse_target_test_trf = np.genfromtxt(self.directory+'/targettrftestrmse.csv')
-        # print self.rmse_test.shape
+            self.source_rmse_test = self.source_rmse_test.reshape((self.source_rmse_test.shape[0], 1))
+            self.source_rmse_train = self.source_rmse_train.reshape((self.source_rmse_train.shape[0], 1))
+        self.target_rmse_train = np.genfromtxt(self.directory+'/target_train_rmse.csv')
+        self.target_rmse_test = np.genfromtxt(self.directory+'/target_test_rmse.csv')
+        self.target_trf_rmse_train = np.genfromtxt(self.directory+'/target_trf_train_rmse.csv')
+        self.target_trf_rmse_test = np.genfromtxt(self.directory+'/target_trf_test_rmse.csv')
+        # print self.source_rmse_test.shape
 
 
     def display_rmse(self):
-        burnin = 0.1 * self.samples  # use post burn in samples
+        burnin = 0.1 * self.num_samples  # use post burn in samples
         self.get_rmse()
 
         rmse_tr = [0 for index in range(self.num_sources)]
@@ -638,24 +638,24 @@ class BayesianTL(object):
         rmsetest_std = [0 for index in range(self.num_sources)]
 
         for index in range(self.num_sources):
-            rmse_tr[index] = np.mean(self.rmse_train[int(burnin):, index])
-            rmsetr_std[index] = np.std(self.rmse_train[int(burnin):, index])
+            rmse_tr[index] = np.mean(self.source_rmse_train[int(burnin):, index])
+            rmsetr_std[index] = np.std(self.source_rmse_train[int(burnin):, index])
 
-            rmse_tes[index] = np.mean(self.rmse_test[int(burnin):, index])
-            rmsetest_std[index] = np.std(self.rmse_test[int(burnin):, index])
+            rmse_tes[index] = np.mean(self.source_rmse_test[int(burnin):, index])
+            rmsetest_std[index] = np.std(self.source_rmse_test[int(burnin):, index])
 
-        rmse_target_train = np.mean(self.rmse_target_train[int(burnin):])
-        rmsetarget_std_train = np.std(self.rmse_target_train[int(burnin):])
+        rmse_target_train = np.mean(self.target_rmse_train[int(burnin):])
+        rmsetarget_std_train = np.std(self.target_rmse_train[int(burnin):])
 
-        rmse_target_test = np.mean(self.rmse_target_test[int(burnin):])
-        rmsetarget_std_test = np.std(self.rmse_target_test[int(burnin):])
+        rmse_target_test = np.mean(self.target_rmse_test[int(burnin):])
+        rmsetarget_std_test = np.std(self.target_rmse_test[int(burnin):])
 
 
-        rmse_target_train_trf = np.mean(self.rmse_target_train_trf[int(burnin):])
-        rmsetarget_std_train_trf = np.std(self.rmse_target_train_trf[int(burnin):])
+        rmse_target_train_trf = np.mean(self.target_trf_rmse_train[int(burnin):])
+        rmsetarget_std_train_trf = np.std(self.target_trf_rmse_train[int(burnin):])
 
-        rmse_target_test_trf = np.mean(self.rmse_target_test_trf[int(burnin):])
-        rmsetarget_std_test_trf = np.std(self.rmse_target_test_trf[int(burnin):])
+        rmse_target_test_trf = np.mean(self.target_trf_rmse_test[int(burnin):])
+        rmsetarget_std_test_trf = np.std(self.target_trf_rmse_test[int(burnin):])
 
         stdscr.addstr(2, 0, "Train rmse:")
         stdscr.addstr(3, 4, "Mean: " + str(rmse_tr) + " Std: " + str(rmsetr_std))
@@ -677,13 +677,13 @@ class BayesianTL(object):
         if not os.path.isdir(self.directory+'/results'):
             os.mkdir(self.directory+'/results')
 
-        burnin = int(0.1 * self.samples)
+        burnin = int(0.1 * self.num_samples)
 
         for index in range(self.num_sources):
             ax = plt.subplot(111)
             x = np.array(np.arange(burnin, self.samples))
-            plt.plot(x, self.rmse_train[burnin: , index], '.' , label="train")
-            plt.plot(x, self.rmse_test[burnin: , index], '.' , label="test")
+            plt.plot(x, self.source_rmse_train[burnin: , index], '.' , label="train")
+            plt.plot(x, self.source_rmse_test[burnin: , index], '.' , label="test")
             plt.legend()
             plt.xlabel('Samples')
             plt.ylabel('RMSE')
@@ -693,8 +693,8 @@ class BayesianTL(object):
 
         ax = plt.subplot(111)
         x = np.array(np.arange(burnin, self.samples))
-        plt.plot(x, self.rmse_target_train[burnin: ], '.' , label="no-transfer")
-        plt.plot(x, self.rmse_target_train_trf[burnin: ], '.' , label="transfer")
+        plt.plot(x, self.target_rmse_train[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.target_trf_rmse_train[burnin: ], '.' , label="transfer")
         plt.legend()
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
@@ -704,8 +704,8 @@ class BayesianTL(object):
 
 
         ax = plt.subplot(111)
-        plt.plot(x, self.rmse_target_test[burnin: ], '.' , label="no-transfer")
-        plt.plot(x, self.rmse_target_test_trf[burnin: ], '.' , label="transfer")
+        plt.plot(x, self.target_rmse_test[burnin: ], '.' , label="no-transfer")
+        plt.plot(x, self.target_trf_rmse_test[burnin: ], '.' , label="transfer")
         plt.legend()
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
@@ -722,7 +722,7 @@ if __name__ == '__main__':
     output = [10, 2, 1, 1]
     num_sources = [1, 1, 1, 5]
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
-    num_samples = [8000, 10000, 4000, 8000]
+    num_samples = [8000, 100, 4000, 8000]
 
     problem = 1
     problem_type = type[problem]
@@ -771,7 +771,7 @@ if __name__ == '__main__':
         w_random_target = np.random.randn(mcmc_task.target_wsize)
 
         # start sampling
-        accept_ratio, transfer_ratio = mcmc_task.mcmc_sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer=True, transfer_coefficient=0.005)
+        accept_ratio, transfer_ratio = mcmc_task.mcmc_sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer=True, transfer_coefficient=0.05)
 
         # display train and test accuracies
         mcmc_task.display_rmse()
