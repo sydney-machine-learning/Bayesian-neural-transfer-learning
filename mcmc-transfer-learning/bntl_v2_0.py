@@ -124,11 +124,11 @@ class Network(object):
 
 # ------------------------------------------------------- MCMC Class --------------------------------------------------
 class BayesianTL(object):
-    def __init__(self, num_samples, num_sources, train_data, test_data, target_train_data, target_test_data, topology, directory, type='regression'):
+    def __init__(self, num_samples, num_sources, source_train_data, source_test_data, target_train_data, target_test_data, topology, directory, type='regression'):
         self.num_samples = num_samples  # NN topology [input, hidden, output]
         self.source_topology = topology  # max epocs
-        self.source_train_data = train_data  #
-        self.source_test_data = test_data
+        self.source_train_data = source_train_data  #
+        self.source_test_data = source_test_data
         self.target_train_data = target_train_data
         self.target_test_data = target_test_data
         self.num_sources = num_sources
@@ -137,9 +137,27 @@ class BayesianTL(object):
         # Create file objects to write the attributes of the samples
         self.source_wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
         self.create_networks()
+        self.join_data()
         self.target_wsize = (self.target_topology[0] * self.target_topology[1]) + (self.target_topology[1] * self.target_topology[2]) + self.target_topology[1] + self.target_topology[2]
 
         # ----------------
+
+    def joint_prior_distribution(self, mu, weights):
+        loss = np.sum(np.log(1/( 1 +  np.square((weights - mu)))))
+        return loss
+
+    def evidence():
+        pass
+
+
+    def join_data(self):
+        train_data = self.target_train_data
+        test_data = self.target_test_data
+        for index in range(self.num_sources):
+            train_data = np.vstack([train_data, self.source_train_data[index]])
+            test_data = np.vstack([test_data, self.source_test_data[index]])
+        self.joint_train_data = train_data
+        self.joint_test_data = test_data
 
     @staticmethod
     def create_directory(directory):
@@ -732,9 +750,9 @@ if __name__ == '__main__':
     #--------------------------------------------- Train for the source task -------------------------------------------
 
     stdscr = None
-    stdscr = curses.initscr()
-    curses.noecho()
-    curses.cbreak()
+    # stdscr = curses.initscr()
+    # curses.noecho()
+    # curses.cbreak()
 
     try:
         # stdscr.clear()
@@ -742,6 +760,7 @@ if __name__ == '__main__':
         # target_test_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
         target_train_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
         target_test_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        print('target data shape:', target_train_data.shape)
         # target_train_data = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
         # target_test_data = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
         # target_train_data = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
@@ -754,6 +773,7 @@ if __name__ == '__main__':
             # test_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
             train_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
             test_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
+            print('source data shape:', train_data[index].shape)
             # train_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
             # test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
             # train_data.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
@@ -763,23 +783,25 @@ if __name__ == '__main__':
         # stdscr.clear()
         random.seed(time.time())
 
-        mcmc_task = BayesianTL(num_samples[problem], num_sources[problem], train_data, test_data, target_train_data, target_test_data, topology,  directory=problem_name, type=problem_type)  # declare class
+        bayesTL = BayesianTL(num_samples[problem], num_sources[problem], train_data, test_data, target_train_data, target_test_data, topology,  directory=problem_name, type=problem_type)  # declare class
+
+        print('joint train data size:',bayesTL.joint_train_data.shape)
 
         # generate random weights
-        w_random = np.random.randn(mcmc_task.source_wsize)
-        w_random_target = np.random.randn(mcmc_task.target_wsize)
+        w_random = np.random.randn(bayesTL.source_wsize)
+        w_random_target = np.random.randn(bayesTL.target_wsize)
 
         # start sampling
-        accept_ratio, transfer_ratio = mcmc_task.mcmc_sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer=True, transfer_coefficient=0.05)
+        # accept_ratio, transfer_ratio = bayesTL.mcmc_sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer=True, transfer_coefficient=0.05)
 
         # display train and test accuracies
-        mcmc_task.display_rmse()
+        # bayesTL.display_rmse()
 
         # Plot the accuracies and rmse
-        mcmc_task.plot_rmse(problem_name)
+        # bayesTL.plot_rmse(problem_name)
 
     finally:
-        curses.echo()
-        curses.nocbreak()
-        curses.endwin()
+        # curses.echo()
+        # curses.nocbreak()
+        # curses.endwin()
         pass
