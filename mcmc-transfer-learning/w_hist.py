@@ -9,8 +9,8 @@ mplt.style.use('bmh')
 mplt.rcParams.update({'font.size': 10})
 mplt.rc('xtick', labelsize=13)
 mplt.rc('ytick', labelsize=13)
-
-weights = np.genfromtxt('weights.csv', delimiter=',')
+directory = raw_input("directory: ")
+weights = np.genfromtxt(directory+'/weights.csv', delimiter=',')
 #
 # def calc_posterior_analytical(data, x, mu_0, sigma_0):
 #     sigma = 1

@@ -364,7 +364,7 @@ class BayesianTL(object):
 
         # To save weights for plotting the distributions later
         weights_saved = np.zeros(self.num_sources + 2)
-        weights_file = open('weights.csv', 'w')
+        weights_file = open(self.directory+'/weights.csv', 'w')
         weight_index = 1 # Index of the weight to save
 
         source_train_rmse_file = open(self.directory+'/source_train_rmse.csv', 'w')
