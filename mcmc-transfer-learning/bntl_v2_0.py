@@ -12,23 +12,6 @@ import sys
 import pickle
 import curses
 
-def convert_time(secs):
-    if secs >= 60:
-        mins = str(int(secs/60))
-        secs = str(int(secs%60))
-    else:
-        secs = str(int(secs))
-        mins = str(00)
-
-    if len(mins) == 1:
-        mins = '0'+mins
-
-    if len(secs) == 1:
-        secs = '0'+secs
-
-    return [mins, secs]
-
-
 # --------------------------------------------- Basic Neural Network Class ---------------------------------------------
 
 class Network(object):
@@ -40,7 +23,6 @@ class Network(object):
         np.random.seed(int(time.time()))
         self.lrate = learn_rate
         self.alpha = alpha
-        self.NumSamples = self.TrainData.shape[0]
 
         self.W1 = np.random.randn(self.Top[0], self.Top[1]) / np.sqrt(self.Top[0])
         self.B1 = np.random.randn(1, self.Top[1]) / np.sqrt(self.Top[1])  # bias first layer
@@ -116,7 +98,7 @@ class Network(object):
             data[:, index] = attribute
         return data
 
-    def evaluate_proposal(self, data, w ):  # BP with SGD (Stocastic BP)
+    def evaluate_proposal(self, data, w):  # BP with SGD (Stocastic BP)
 
         self.decode(w)  # method to decode w into W1, W2, B1, B2.
         size = data.shape[0]
@@ -164,8 +146,24 @@ class BayesianTL(object):
         if not os.path.isdir(directory):
             os.mkdir(directory)
 
+    @staticmethod
+    def convert_time(secs):
+        if secs >= 60:
+            mins = str(int(secs/60))
+            secs = str(int(secs%60))
+        else:
+            secs = str(int(secs))
+            mins = str(00)
 
-    def report_progress(self, stdscr, sample_count, elapsed, rmse_train_source, rmse_test_source, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer_sample, last_transfer_rmse, source_index, naccept_target_trf):
+        if len(mins) == 1:
+            mins = '0'+mins
+
+        if len(secs) == 1:
+            secs = '0'+secs
+
+        return [mins, secs]
+
+    def report_progress(self, stdscr, sample_count, elapsed, rmse_train_source, rmse_test_source, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer_sample, last_transfer_rmse, source_index, last_transfer_accepted):
         stdscr.addstr(0, 0, "{} Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(self.directory, sample_count, self.num_samples, elapsed[0], elapsed[1]))
         i = 2
         index = 0
@@ -181,8 +179,7 @@ class BayesianTL(object):
         i += 4
         stdscr.addstr(i, 3, "Target w/ transfer Progress:")
         stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
-        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered rmse: {:.4f} Source index: {} last accept: {} ".format(last_transfer_sample, last_transfer_rmse, source_index, naccept_target_trf) )
-
+        stdscr.addstr(i + 2, 5, "Last transfer attempt: {} Last transfered rmse: {:.4f} Source index: {} Last transfer accepted: {} ".format(last_transfer_sample, last_transfer_rmse, source_index, last_transfer_accepted))
         stdscr.refresh()
 
     def create_networks(self):
@@ -454,8 +451,8 @@ class BayesianTL(object):
         for index in range(self.num_sources):
             source_rmse_train_sample[index] = source_rmse_train[index]
             source_rmse_test_sample[index] = source_rmse_test[index]
-        source_rmse_train_prev = source_rmse_train
-        source_rmse_test_prev = source_rmse_test
+        source_rmse_train_current = source_rmse_train
+        source_rmse_test_current = source_rmse_test
 
         # save the information
         np.savetxt(source_train_rmse_file, [source_rmse_train_sample])
@@ -464,14 +461,14 @@ class BayesianTL(object):
         np.savetxt(target_test_rmse_file, [target_rmse_test])
 
         # save values into previous variables
-        target_rmse_train_prev = target_rmse_train
-        target_rmse_test_prev = target_rmse_test
+        target_rmse_train_current = target_rmse_train
+        target_rmse_test_current = target_rmse_test
 
         np.savetxt(target_trf_train_rmse_file, [target_trf_rmse_train])
         np.savetxt(target_trf_test_rmse_file, [target_trf_rmse_test])
         # save values into previous variables
-        target_trf_rmse_train_prev = target_trf_rmse_train
-        target_trf_rmse_test_prev = target_trf_rmse_test
+        target_trf_rmse_train_current = target_trf_rmse_train
+        target_trf_rmse_test_current = target_trf_rmse_test
 
         source_num_accept = np.zeros((self.num_sources))
         target_num_accept = 0
@@ -489,9 +486,10 @@ class BayesianTL(object):
         source_prior_proposal = np.zeros((self.num_sources))
         transfer_interval = int( transfer_coefficient * self.num_samples )
 
-        last_transfer_sample  = 0
-        last_transfer_rmse = 0
+        last_transfer_sample  = None
+        last_transfer_rmse = float()
         source_index = None
+        last_transfer_accepted = None
 
         for sample in range(self.num_samples - 1):
 
@@ -519,11 +517,11 @@ class BayesianTL(object):
                     source_eta[index] = source_eta_proposal[index]
                     source_rmse_train_sample[index] = source_rmse_train[index]
                     source_rmse_test_sample[index] = source_rmse_test[index]
-                    source_rmse_train_prev[index] = source_rmse_train[index]
-                    source_rmse_test_prev[index] = source_rmse_test[index]
+                    source_rmse_train_current[index] = source_rmse_train[index]
+                    source_rmse_test_current[index] = source_rmse_test[index]
                 else:
-                    source_rmse_train_sample[index] = source_rmse_train_prev[index]
-                    source_rmse_test_sample[index] = source_rmse_test_prev[index]
+                    source_rmse_train_sample[index] = source_rmse_train_current[index]
+                    source_rmse_test_sample[index] = source_rmse_test_current[index]
 
             if save_knowledge:
                 np.savetxt(source_train_rmse_file, [source_rmse_train_sample])
@@ -537,12 +535,12 @@ class BayesianTL(object):
                 target_num_accept += 1
                 target_weights_current = target_weights_proposal
                 target_eta = target_eta_proposal
-                target_rmse_train_prev = target_rmse_train
-                target_rmse_test_prev = target_rmse_test
+                target_rmse_train_current = target_rmse_train
+                target_rmse_test_current = target_rmse_test
 
             if save_knowledge:
-                np.savetxt(target_train_rmse_file, [target_rmse_train_prev])
-                np.savetxt(target_test_rmse_file, [target_rmse_test_prev])
+                np.savetxt(target_train_rmse_file, [target_rmse_train_current])
+                np.savetxt(target_test_rmse_file, [target_rmse_test_current])
                 weights_saved[self.num_sources] = target_weights_current[weight_index]
 
 
@@ -556,13 +554,14 @@ class BayesianTL(object):
                     source_eta = source_eta.reshape((self.num_sources,1))
                     source_eta_proposal = source_eta_proposal.reshape((self.num_sources,1))
                     eta_stack = np.vstack([target_trf_eta, source_eta, source_eta_proposal])
-                    target_trf_likelihood, target_trf_prior, target_trf_weights_current, target_trf_eta, target_trf_rmse_train_prev, target_trf_rmse_test_prev, accept, transfer_index = self.transfer(weights_stack.copy(), eta_stack.copy(), target_trf_likelihood, target_trf_prior, target_trf_rmse_train_prev, target_trf_rmse_test_prev)
+                    target_trf_likelihood, target_trf_prior, target_trf_weights_current, target_trf_eta, target_trf_rmse_train_current, target_trf_rmse_test_current, accept, transfer_index = self.transfer(weights_stack.copy(), eta_stack.copy(), target_trf_likelihood, target_trf_prior, target_trf_rmse_train_current, target_trf_rmse_test_current)
 
                     if accept:
-                        target_trf_num_accept = sample
+                        target_trf_num_accept += 1
                         num_transfer_accepted += 1
-                        last_transfer_rmse = target_trf_rmse_train_prev
+                        last_transfer_rmse = target_trf_rmse_train_current
                         source_index = transfer_index
+                        last_transfer_accepted = sample
 
                 else:
                     accept, target_trf_rmse_train, target_trf_rmse_test, target_trf_likelihood, target_trf_prior = self.acceptance_probability(self.target, self.target_train_data, self.target_test_data, target_trf_weights_proposal, target_trf_tau_proposal, target_trf_likelihood, target_trf_prior)
@@ -573,17 +572,17 @@ class BayesianTL(object):
                         target_trf_eta = target_trf_eta_proposal
 
                         # save values into previous variables
-                        target_trf_rmse_train_prev = target_trf_rmse_train
-                        target_trf_rmse_test_prev = target_trf_rmse_test
+                        target_trf_rmse_train_current = target_trf_rmse_train
+                        target_trf_rmse_test_current = target_trf_rmse_test
 
                 if save_knowledge:
-                    np.savetxt(target_trf_train_rmse_file, [target_trf_rmse_train_prev])
-                    np.savetxt(target_trf_test_rmse_file, [target_trf_rmse_test_prev])
+                    np.savetxt(target_trf_train_rmse_file, [target_trf_rmse_train_current])
+                    np.savetxt(target_trf_test_rmse_file, [target_trf_rmse_test_current])
                     weights_saved[self.num_sources + 1] = target_trf_weights_current[weight_index]
                     np.savetxt(weights_file, [weights_saved], delimiter=',')
 
-            elapsed_time = convert_time(time.time() - start)
-            self.report_progress(stdscr, sample, elapsed_time, source_rmse_train_sample, source_rmse_test_sample, target_rmse_train_prev, target_rmse_test_prev, target_trf_rmse_train_prev, target_trf_rmse_test_prev, last_transfer_sample, last_transfer_rmse, source_index, num_transfer_accepted)
+            elapsed_time = BayesianTL.convert_time(time.time() - start)
+            self.report_progress(stdscr, sample, elapsed_time, source_rmse_train_sample, source_rmse_test_sample, target_rmse_train_current, target_rmse_test_current, target_trf_rmse_train_current, target_trf_rmse_test_current, last_transfer_sample, last_transfer_rmse, source_index, last_transfer_accepted)
 
         accept_ratio_target = np.array([target_num_accept, target_trf_num_accept]) / float(self.num_samples) * 100
         elapsed_time = time.time() - start
