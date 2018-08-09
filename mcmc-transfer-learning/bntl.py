@@ -240,9 +240,9 @@ class TransferLearningMCMC(object):
         return [loss, rmse, acc]
 
     def class_prior(self, sigma_squared, w):
-        h = self.topology[1]  # number hidden neurons
-        d = self.topology[0]  # number input neurons
-        part1 = -1 * ((d * h + h + 2) / 2) * np.log(sigma_squared)
+        # h = self.topology[1]  # number hidden neurons
+        # d = self.topology[0]  # number input neurons
+        part1 = -1 * ((w.shape[0]) / 2) * np.log(sigma_squared)
         part2 = 1 / (2 * sigma_squared) * (sum(np.square(w)))
         log_loss = part1 - part2
         return log_loss
@@ -260,9 +260,7 @@ class TransferLearningMCMC(object):
         return [np.sum(loss), rmse]
 
     def reg_prior(self, sigma_squared, nu_1, nu_2, w, tausq):
-        h = self.topology[1]  # number hidden neurons
-        d = self.topology[0]  # number input neurons
-        part1 = -1 * ((d * h + h + 2) / 2) * np.log(sigma_squared)
+        part1 = -1 * (w.shape[0] / 2) * np.log(sigma_squared)
         part2 = 1 / (2 * sigma_squared) * (sum(np.square(w)))
         log_loss = part1 - part2 - (1 + nu_1) * np.log(tausq) - (nu_2 / tausq)
         return log_loss
