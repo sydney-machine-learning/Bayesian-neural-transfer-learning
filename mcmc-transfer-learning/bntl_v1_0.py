@@ -403,7 +403,7 @@ class BayesianTL(object):
         source_y_train = []
         source_y_test = []
 
-
+        # initialize source task variables
         for index in range(self.num_sources):
             source_train_size[index] = self.source_train_data[index].shape[0]
             source_test_size[index] = self.source_test_data[index].shape[0]
@@ -419,9 +419,7 @@ class BayesianTL(object):
             [source_likelihood[index], source_rmse_train[index]] = self.likelihood_function(self.sources[index], self.source_train_data[index], source_weights_current[index], source_tau_proposal[index])
             source_rmse_test[index] = self.calculate_rmse(source_prediction_test[index], source_y_test[index])
 
-
-        # pos_w = np.ones((self.samples, self.num_sources, self.wsize))  # posterior of all weights and bias over all samples
-
+        # Initialize target task variables
         target_train_size = self.target_train_data.shape[0]
         target_test_size = self.target_test_data.shape[0]
         target_y_test = self.target_test_data[:, self.target_topology[0]: self.target_topology[0] + self.target_topology[2]]
@@ -460,13 +458,13 @@ class BayesianTL(object):
         np.savetxt(target_train_rmse_file, [target_rmse_train])
         np.savetxt(target_test_rmse_file, [target_rmse_test])
 
-        # save values into previous variables
+        # save values into current variables
         target_rmse_train_current = target_rmse_train
         target_rmse_test_current = target_rmse_test
-
         np.savetxt(target_trf_train_rmse_file, [target_trf_rmse_train])
         np.savetxt(target_trf_test_rmse_file, [target_trf_rmse_test])
-        # save values into previous variables
+
+        # save values into current variables
         target_trf_rmse_train_current = target_trf_rmse_train
         target_trf_rmse_test_current = target_trf_rmse_test
 
@@ -484,6 +482,8 @@ class BayesianTL(object):
         weights_saved[self.num_sources + 1] = target_trf_weights_current[weight_index]
 
         source_prior_proposal = np.zeros((self.num_sources))
+
+        # Initialize transfer interval
         transfer_interval = int( transfer_coefficient * self.num_samples )
 
         last_transfer_sample  = None
