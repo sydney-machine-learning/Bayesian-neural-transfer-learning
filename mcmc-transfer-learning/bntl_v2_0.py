@@ -200,10 +200,6 @@ class BayesianTL(object):
     def gaussian_likelihood(neural_network, data, weights, tausq):
         desired = data[:, neural_network.Top[0]: neural_network.Top[0] + neural_network.Top[2]]
         prediction = neural_network.evaluate_proposal(data, weights)
-        # y_m = data[:, 522:524]
-        # fx_m = Network.denormalize(fx.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
-        # y_m = Network.denormalize(y.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
-        # rmse = self.distance(fx_m, y_m)
         rmse = BayesianTL.calculate_rmse(prediction, desired)
         loss = -0.5 * np.log(2 * np.pi * tausq) - 0.5 * np.square(desired - prediction) / tausq
         return [np.sum(loss), rmse]
@@ -216,9 +212,9 @@ class BayesianTL(object):
         return log_loss
 
     def likelihood_function(self, neural_network, data, weights, tau):
-        if self.type == 'regression':
+        if self.problem_type == 'regression':
             likelihood, rmse = self.gaussian_likelihood(neural_network, data, weights, tau)
-        elif self.type == 'classification':
+        elif self.problem_type == 'classification':
             likelihood, rmse, accuracy = self.multinomial_likelihood(neural_network, data, weights)
         return likelihood, rmse
 
@@ -273,7 +269,7 @@ class BayesianTL(object):
                 prior_proposal = prior_current
             return accept, rmse_train_proposal, rmse_test_proposal, likelihood_current, prior_current
 
-    def mcmc_sampler(self, source_weights_initial, target_weights_initial, stdscr, save_knowledge=False, transfer=True, transfer_coefficient=0.01):
+    def mcmc_sampler(self, stdscr, save_knowledge=False):
 
         # To save weights for plotting the distributions later
         weights_saved = np.zeros(self.num_sources + 2)
@@ -686,9 +682,6 @@ if __name__ == '__main__':
         # generate random weights
         w_random = np.random.randn(bayesTL.source_wsize)
         w_random_target = np.random.randn(bayesTL.target_wsize)
-
-        # start sampling
-        # accept_ratio, transfer_ratio = bayesTL.mcmc_sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer=True, transfer_coefficient=0.05)
 
         # display train and test accuracies
         # bayesTL.display_rmse()
