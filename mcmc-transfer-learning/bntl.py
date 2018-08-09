@@ -1,4 +1,4 @@
-self.num_sources# !/usr/bin/python
+# !/usr/bin/python
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -155,7 +155,7 @@ class BayesianTL(object):
         # Create file objects to write the attributes of the samples
         self.source_wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
         self.createNetworks()
-        self.target_wsize = (self.targetTop[0] * self.targetTop[1]) + (self.targetTop[1] * self.targetTop[2]) + self.targetTop[1] + self.targetTop[2]
+        self.target_wsize = (self.target_topology[0] * self.target_topology[1]) + (self.target_topology[1] * self.target_topology[2]) + self.target_topology[1] + self.target_topology[2]
 
         # ----------------
 
@@ -165,7 +165,7 @@ class BayesianTL(object):
             os.mkdir(directory)
 
 
-    def report_progress(self, stdscr, sample_count, elapsed, rmse_train_source, rmse_test_source, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer_smaple, last_transfer_rmse, source_index, naccept_target_trf):
+    def report_progress(self, stdscr, sample_count, elapsed, rmse_train_source, rmse_test_source, rmse_train_target, rmse_test_target, rmse_train_target_trf, rmse_test_target_trf, last_transfer_sample, last_transfer_rmse, source_index, naccept_target_trf):
         stdscr.addstr(0, 0, "{} Samples Processed: {}/{} \tTime Elapsed: {}:{}".format(self.directory, sample_count, self.num_samples, elapsed[0], elapsed[1]))
         i = 2
         index = 0
@@ -181,7 +181,7 @@ class BayesianTL(object):
         i += 4
         stdscr.addstr(i, 3, "Target w/ transfer Progress:")
         stdscr.addstr(i + 1, 5, "Train rmse: {:.4f}  Test rmse: {:.4f}".format(rmse_train_target_trf, rmse_test_target_trf))
-        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered rmse: {:.4f} Source index: {} last accept: {} ".format(last_transfer, last_transfer_rmse, source_index, naccept_target_trf) )
+        stdscr.addstr(i + 2, 5, "Last transfered sample: {} Last transfered rmse: {:.4f} Source index: {} last accept: {} ".format(last_transfer_sample, last_transfer_rmse, source_index, naccept_target_trf) )
 
         stdscr.refresh()
 
@@ -222,8 +222,9 @@ class BayesianTL(object):
             loss = self.classification_prior(self.sigma_squared, weights)
         return loss
 
-    def multinomial_likelihood(self, neural_network, data, weights):
-        y = data[:, self.source_topology[0]:]
+    @staticmethod
+    def multinomial_likelihood(neural_network, data, weights):
+        y = data[:, neural_network.Top[0]: neural_network.top[2]]
         fx = neuralnet.evaluate_proposal(data, weights)
         rmse = self.calculate_rmse(fx, y) # Can be replaced by calculate_nmse function for reporting NMSE
         probability = neural_network.softmax(fx)
@@ -265,7 +266,7 @@ class BayesianTL(object):
         return [np.sum(loss), rmse]
 
     @staticmethod
-    def gaussian_prior(self, sigma_squared, nu_1, nu_2, weights, tausq):
+    def gaussian_prior(sigma_squared, nu_1, nu_2, weights, tausq):
         part1 = -1 * (weights.shape[0] / 2) * np.log(sigma_squared)
         part2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
         log_loss = part1 - part2 - (1 + nu_1) * np.log(tausq) - (nu_2 / tausq)
@@ -277,7 +278,7 @@ class BayesianTL(object):
             w_proposal[index] = np.random.normal(w_mean[index], w_std[index], 1)
         return w_proposal
 
-    def transfer(self, weights, eta, likelihood, prior, rmse_train, rmse_test):
+    def transfer(self, weights, eta, likelihood, prior, target_rmse_train, target_rmse_test):
         accept = False
         target_weights_current = weights[0]
         target_rmse_train_current = target_rmse_train
@@ -310,7 +311,7 @@ class BayesianTL(object):
         difference_likelihood = likelihood_proposal - likelihood
         difference_prior = prior_proposal - prior
 
-        diagmat_size = min(500, w_current.shape[0])
+        diagmat_size = min(500, target_weights_current.shape[0])
         # diagmat_size = int(0.01 * w_current.shape[0])
         sigma_diagmat = np.zeros((diagmat_size, diagmat_size))
         np.fill_diagonal(sigma_diagmat, 0.02)
@@ -333,7 +334,7 @@ class BayesianTL(object):
         difference_transfer_distribution = transfer_distribution_proposal - transfer_distribution_current
 
         difference_sum = min(700, difference_likelihood + difference_prior + difference_transfer_distribution)
-        mh_transfer_ratio = min(1, math.exp(difference_sum))
+        mh_transfer_ratio = min(1, np.exp(difference_sum))
         u = random.uniform(0, 1)
         if u < mh_transfer_ratio:
             accept = True
@@ -347,16 +348,16 @@ class BayesianTL(object):
         accept = False
         [likelihood_proposal, rmse_train] = self.likelihood_function(neural_network, train_data, weights, tau)
         [likelihood_ignore, rmse_test] = self.likelihood_function(neural_network, test_data, weights, tau)
-        prior_proposal = self.log_prior(weights, tau)  # takes care of the gradients
+        prior_proposal = self.prior_function(weights, tau)  # takes care of the gradients
         difference_likelihood = likelihood_proposal - likelihood
         difference_prior = prior_proposal - prior
         difference_sum = min(700, difference_likelihood + difference_prior)
-        mh_ratio = min(1, math.exp(difference_sum))
+        mh_ratio = min(1, np.exp(difference_sum))
         u = random.uniform(0, 1)
         if u < mh_ratio:
             accept = True
             likelihood = likelihood_proposal
-            prior = prior_prop
+            prior = prior_proposal
         return accept, rmse_train, rmse_test, likelihood, prior
 
     def mcmc_sampler(self, source_weights_initial, target_weights_initial, stdscr, save_knowledge=False, transfer=True, transfer_coefficient=0.01):
@@ -390,8 +391,8 @@ class BayesianTL(object):
         source_rmse_test_sample = np.zeros(source_rmse_test.shape)
         source_train_size = np.zeros((self.num_sources))
         source_test_size = np.zeros((self.num_sources))
-        source_weights_current = np.zeros((self.num_sources, self.source_weights_size))
-        source_weights_proposal = np.zeros((self.num_sources, self.source_weights_size))
+        source_weights_current = np.zeros((self.num_sources, self.source_wsize))
+        source_weights_proposal = np.zeros((self.num_sources, self.source_wsize))
 
         source_prediction_train = []
         source_prediction_test = []
@@ -434,7 +435,7 @@ class BayesianTL(object):
         target_prediction_test = self.target.evaluate_proposal(self.target_test_data, target_weights_current)
         target_eta = np.log(np.var(target_prediction_train - target_y_train))
         target_tau_proposal = np.exp(target_eta)
-        target_prior = self.prior_fuction(target_weights_current, target_tau_proposal)
+        target_prior = self.prior_function(target_weights_current, target_tau_proposal)
         [target_likelihood, target_rmse_train] = self.likelihood_function(self.target, self.target_train_data, target_weights_current, target_tau_proposal)
         target_rmse_test = self.calculate_rmse(target_prediction_test, target_y_test)
 
@@ -466,8 +467,8 @@ class BayesianTL(object):
         target_rmse_train_prev = target_rmse_train
         target_rmse_test_prev = target_rmse_test
 
-        np.savetxt(target_trf_train_rmse_file, [rmse_train_target_trf])
-        np.savetxt(target_trf_test_rmse_file, [rmse_test_target_trf])
+        np.savetxt(target_trf_train_rmse_file, [target_trf_rmse_train])
+        np.savetxt(target_trf_test_rmse_file, [target_trf_rmse_test])
         # save values into previous variables
         target_trf_rmse_train_prev = target_trf_rmse_train
         target_trf_rmse_test_prev = target_trf_rmse_test
@@ -504,14 +505,14 @@ class BayesianTL(object):
             target_tau_proposal = np.exp(target_eta_proposal)
 
             if transfer == True:
-                target_trf_weights_proposal = target_trf_weights_current + np.random.normal(0, self.weights_stepsize, self.wsize_target)
-                target_trf_eta_pro = target_trf_eta + np.random.normal(0, self.eta_stepsize, 1)
-                target_trf_tau_pro = np.exp(target_trf_eta_proposal)
+                target_trf_weights_proposal = target_trf_weights_current + np.random.normal(0, self.weights_stepsize, self.target_wsize)
+                target_trf_eta_proposal = target_trf_eta + np.random.normal(0, self.eta_stepsize, 1)
+                target_trf_tau_proposal = np.exp(target_trf_eta_proposal)
 
 
             # Check MH-acceptance probability for all source tasks
             for index in range(self.num_sources):
-                accept, source_rmse_train[index], source_rmse_test[index], source_likelihood[index], source_prior[index] = self.acceptance_probability(self.sources[index], self.source_train_data[index], self.source_test_data[index], source_weights_proposal[index], source_tau_proposal[index], likelihood[index], prior[index])
+                accept, source_rmse_train[index], source_rmse_test[index], source_likelihood[index], source_prior[index] = self.acceptance_probability(self.sources[index], self.source_train_data[index], self.source_test_data[index], source_weights_proposal[index], source_tau_proposal[index], source_likelihood[index], source_prior[index])
                 if accept:
                     source_num_accept[index] += 1
                     source_weights_current[index] = source_weights_proposal[index]
@@ -552,7 +553,7 @@ class BayesianTL(object):
                     num_transfer_attempts += 1
                     last_transfer_sample = sample
                     weights_stack = np.vstack([target_trf_weights_current, source_weights_current, source_weights_proposal])
-                    source_eta = eta.reshape((self.num_sources,1))
+                    source_eta = source_eta.reshape((self.num_sources,1))
                     source_eta_proposal = source_eta_proposal.reshape((self.num_sources,1))
                     eta_stack = np.vstack([target_trf_eta, source_eta, source_eta_proposal])
                     target_trf_likelihood, target_trf_prior, target_trf_weights_current, target_trf_eta, target_trf_rmse_train_prev, target_trf_rmse_test_prev, accept, transfer_index = self.transfer(weights_stack.copy(), eta_stack.copy(), target_trf_likelihood, target_trf_prior, target_trf_rmse_train_prev, target_trf_rmse_test_prev)
@@ -719,17 +720,16 @@ if __name__ == '__main__':
     input = [11, 520, 21, 4]
     hidden = [105, 140, 55, 25]
     output = [10, 2, 1, 1]
-    numSources = [1, 1, 1, 5]
+    num_sources = [1, 1, 1, 5]
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
-    numSamples = [8000, 10000, 4000, 8000]
+    num_samples = [8000, 1000, 4000, 8000]
 
     problem = 1
-    problemtype = type[problem]
+    problem_type = type[problem]
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
 
     start = None
-
     #--------------------------------------------- Train for the source task -------------------------------------------
 
     stdscr = None
@@ -737,43 +737,41 @@ if __name__ == '__main__':
     curses.noecho()
     curses.cbreak()
 
-    ntransferlist = []
-
     try:
         # stdscr.clear()
-        # targettraindata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-        targettraindata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        targettestdata = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        # targettraindata = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
-        # targettraindata = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
-        # targettestdata = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
+        # target_train_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+        # target_test_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+        target_train_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        target_test_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        # target_train_data = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
+        # target_test_data = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        # target_train_data = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
+        # target_test_data = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
 
-        traindata = []
-        testdata = []
-        for i in range(numSources[problem]):
-            # traindata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
-            traindata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'train.csv', delimiter=',')[:, :-2])
-            testdata.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(i)+'test.csv', delimiter=',')[:, :-2])
-            # traindata.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
-            # traindata.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
-            # testdata.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
+        train_data = []
+        test_data = []
+        for index in range(num_sources[problem]):
+            # train_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
+            # test_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
+            train_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
+            test_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
+            # train_data.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            # test_data.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+            # train_data.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
+            # test_data.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
 
         # stdscr.clear()
         random.seed(time.time())
 
-        mcmc_task = TransferLearningMCMC(numSamples[problem], numSources[problem], traindata, testdata, targettraindata, targettestdata, topology,  directory=problem_name, type=problemtype)  # declare class
+        mcmc_task = BayesianTL(num_samples[problem], num_sources[problem], train_data, test_data, target_train_data, target_test_data, topology,  directory=problem_name, type=problem_type)  # declare class
 
         # generate random weights
-        w_random = np.random.randn(mcmc_task.wsize)
-        w_random_target = np.random.randn(mcmc_task.wsize_target)
+        w_random = np.random.randn(mcmc_task.source_wsize)
+        w_random_target = np.random.randn(mcmc_task.target_wsize)
 
         # start sampling
-        accept_ratio, transfer_ratio = mcmc_task.sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer='mh', quantum_coeff=0.005)
+        accept_ratio, transfer_ratio = mcmc_task.mcmc_sampler(w_random, w_random_target, save_knowledge=True, stdscr=stdscr, transfer=True, transfer_coefficient=0.005)
 
         # display train and test accuracies
         mcmc_task.display_rmse()
