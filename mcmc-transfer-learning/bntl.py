@@ -154,7 +154,7 @@ class BayesianTL(object):
         self.directory = directory
         # Create file objects to write the attributes of the samples
         self.source_wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
-        self.createNetworks()
+        self.create_networks()
         self.target_wsize = (self.target_topology[0] * self.target_topology[1]) + (self.target_topology[1] * self.target_topology[2]) + self.target_topology[1] + self.target_topology[2]
 
         # ----------------
@@ -185,7 +185,7 @@ class BayesianTL(object):
 
         stdscr.refresh()
 
-    def createNetworks(self):
+    def create_networks(self):
         self.sources = []
         for index in range(self.num_sources):
             self.sources.append(Network(self.source_topology, self.source_train_data[index], self.source_test_data[index]))
