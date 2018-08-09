@@ -722,7 +722,7 @@ if __name__ == '__main__':
     output = [10, 2, 1, 1]
     num_sources = [1, 1, 1, 5]
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
-    num_samples = [8000, 1000, 4000, 8000]
+    num_samples = [8000, 10000, 4000, 8000]
 
     problem = 1
     problem_type = type[problem]
@@ -743,8 +743,8 @@ if __name__ == '__main__':
         # target_test_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
         target_train_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
         target_test_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        # target_train_data = np.genfromtxt('../../datasets/synthetic_data/target_train.csv', delimiter=',')
-        # target_test_data = np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=',')
+        # target_train_data = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
+        # target_test_data = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
         # target_train_data = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
         # target_test_data = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
 
@@ -755,8 +755,8 @@ if __name__ == '__main__':
             # test_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
             train_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
             test_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
-            # train_data.append(np.genfromtxt('../../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
-            # test_data.append(np.genfromtxt('../../datasets/synthetic_data/target_test.csv', delimiter=','))
+            # train_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
+            # test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
             # train_data.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
             # test_data.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
