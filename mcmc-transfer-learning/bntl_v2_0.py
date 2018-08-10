@@ -573,9 +573,8 @@ class BayesianTL(object):
 
         for index in range(self.num_sources):
             ax = plt.subplot(111)
-            x = np.array(np.arange(burnin, self.num_samples))
-            plt.plot(x, self.source_rmse_train[burnin: , index], '.' , label="train")
-            plt.plot(x, self.source_rmse_test[burnin: , index], '.' , label="test")
+            plt.plot(self.source_rmse_train[burnin: , index], '.' , label="train")
+            plt.plot(self.source_rmse_test[burnin: , index], '.' , label="test")
             plt.legend()
             plt.xlabel('Samples')
             plt.ylabel('RMSE')
@@ -584,9 +583,8 @@ class BayesianTL(object):
             plt.clf()
 
         ax = plt.subplot(111)
-        x = np.array(np.arange(burnin, self.samples))
-        plt.plot(x, self.target_rmse_train[burnin: ], '.' , label="no-transfer")
-        plt.plot(x, self.joint_rmse_train[burnin: ], '.' , label="transfer")
+        plt.plot(self.target_rmse_train[burnin: ], '.' , label="w-target")
+        plt.plot(self.joint_rmse_train[burnin: ], '.' , label="mu")
         plt.legend()
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
@@ -596,8 +594,8 @@ class BayesianTL(object):
 
 
         ax = plt.subplot(111)
-        plt.plot(x, self.target_rmse_test[burnin: ], '.' , label="no-transfer")
-        plt.plot(x, self.joint_rmse_test[burnin: ], '.' , label="transfer")
+        plt.plot(self.target_rmse_test[burnin: ], '.' , label="w-target")
+        plt.plot(self.joint_rmse_test[burnin: ], '.' , label="mu")
         plt.legend()
         plt.xlabel('Samples')
         plt.ylabel('RMSE')
@@ -660,13 +658,13 @@ if __name__ == '__main__':
         w_random = np.random.randn(bayesTL.wsize)
 
         # Start sampleEr
-        bayesTL.mcmc_sampler(stdscr, w_random, save_knowledge=True)
+        # bayesTL.mcmc_sampler(stdscr, w_random, save_knowledge=True)
 
         # display train and test accuracies
         bayesTL.display_rmse()
 
         # Plot the accuracies and rmse
-        # bayesTL.plot_rmse(problem_name)
+        bayesTL.plot_rmse(problem_name)
 
     finally:
         # curses.echo()
