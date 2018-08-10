@@ -426,7 +426,8 @@ class BayesianTL(object):
 
 
             # Propose hyper-parameters for source and target tasks
-            source_weights_proposal = self.propose_weights(joint_weights_current)
+            for index in range(self.num_sources):
+                source_weights_proposal[index] = self.propose_weights(joint_weights_current)
             source_eta_proposal = source_eta + np.random.normal(0, self.eta_stepsize, 1)
             source_tau_proposal = np.exp(source_eta_proposal)
 
@@ -435,20 +436,20 @@ class BayesianTL(object):
             target_tau_proposal = np.exp(target_eta_proposal)
 
 
-            # # Check MH-acceptance probability for all source tasks
-            # for index in range(self.num_sources):
-            #     accept, source_rmse_train[index], source_rmse_test[index], source_likelihood[index], source_prior[index] = self.evaluate_proposal(self.neural_network, self.source_train_data[index], self.source_test_data[index], source_weights_proposal[index], source_tau_proposal[index], source_likelihood[index], source_prior[index], mu=joint_weights_current)
-            #     if accept:
-            #         source_num_accept[index] += 1
-            #         source_weights_current[index] = source_weights_proposal[index]
-            #         source_eta[index] = source_eta_proposal[index]
-            #         source_rmse_train_current[index] = source_rmse_train[index]
-            #         source_rmse_test_current[index] = source_rmse_test[index]
-            #
-            # if save_knowledge:
-            #     np.savetxt(source_train_rmse_file, [source_rmse_train_current])
-            #     np.savetxt(source_test_rmse_file, [source_rmse_test_current])
-            #     weights_saved[: self.num_sources] = source_weights_current[:, weight_index]
+            # Check MH-acceptance probability for all source tasks
+            for index in range(self.num_sources):
+                accept, source_rmse_train[index], source_rmse_test[index], source_likelihood[index], source_prior[index] = self.evaluate_proposal(self.neural_network, self.source_train_data[index], self.source_test_data[index], source_weights_proposal[index], source_tau_proposal[index], source_likelihood[index], source_prior[index], mu=joint_weights_current)
+                if accept:
+                    source_num_accept[index] += 1
+                    source_weights_current[index] = source_weights_proposal[index]
+                    source_eta[index] = source_eta_proposal[index]
+                    source_rmse_train_current[index] = source_rmse_train[index]
+                    source_rmse_test_current[index] = source_rmse_test[index]
+
+            if save_knowledge:
+                np.savetxt(source_train_rmse_file, [source_rmse_train_current])
+                np.savetxt(source_test_rmse_file, [source_rmse_test_current])
+                weights_saved[: self.num_sources] = source_weights_current[:, weight_index]
 
 
             # Check MH-acceptance probability for target task
@@ -497,11 +498,11 @@ class BayesianTL(object):
 
 
     def get_rmse(self):
-    #     self.source_rmse_train = np.genfromtxt(self.directory+'/source_train_rmse.csv')
-    #     self.source_rmse_test = np.genfromtxt(self.directory+'/source_test_rmse.csv')
-    #     if self.num_sources == 1:
-    #         self.source_rmse_test = self.source_rmse_test.reshape((self.source_rmse_test.shape[0], 1))
-    #         self.source_rmse_train = self.source_rmse_train.reshape((self.source_rmse_train.shape[0], 1))
+        self.source_rmse_train = np.genfromtxt(self.directory+'/source_train_rmse.csv')
+        self.source_rmse_test = np.genfromtxt(self.directory+'/source_test_rmse.csv')
+        if self.num_sources == 1:
+            self.source_rmse_test = self.source_rmse_test.reshape((self.source_rmse_test.shape[0], 1))
+            self.source_rmse_train = self.source_rmse_train.reshape((self.source_rmse_train.shape[0], 1))
         self.target_rmse_train = np.genfromtxt(self.directory+'/target_train_rmse.csv')
         self.target_rmse_test = np.genfromtxt(self.directory+'/target_test_rmse.csv')
         self.joint_rmse_train = np.genfromtxt(self.directory+'/joint_train_rmse.csv')
@@ -516,11 +517,11 @@ class BayesianTL(object):
         rmsetr_std = [0 for index in range(self.num_sources)]
         rmse_tes = [0 for index in range(self.num_sources)]
         rmsetest_std = [0 for index in range(self.num_sources)]
-        # for index in range(self.num_sources):
-        #     rmse_tr[index] = np.mean(self.source_rmse_train[burnin:, index])
-        #     rmsetr_std[index] = np.std(self.source_rmse_train[burnin:, index])
-        #     rmse_tes[index] = np.mean(self.source_rmse_test[burnin:, index])
-        #     rmsetest_std[index] = np.std(self.source_rmse_test[burnin:, index])
+        for index in range(self.num_sources):
+            rmse_tr[index] = np.mean(self.source_rmse_train[burnin:, index])
+            rmsetr_std[index] = np.std(self.source_rmse_train[burnin:, index])
+            rmse_tes[index] = np.mean(self.source_rmse_test[burnin:, index])
+            rmsetest_std[index] = np.std(self.source_rmse_test[burnin:, index])
 
         rmse_target_train = np.mean(self.target_rmse_train[burnin:])
         rmsetarget_std_train = np.std(self.target_rmse_train[burnin:])
