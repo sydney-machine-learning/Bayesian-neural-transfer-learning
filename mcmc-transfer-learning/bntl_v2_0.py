@@ -156,8 +156,7 @@ class BayesianTL(object):
         return [mins, secs]
 
     @staticmethod
-    def log_t_dist(weights, mu):
-        nu = self.degrees_of_freedom
+    def log_t_dist(weights, mu, nu):
         part_1 = -(nu + 1) / 2 * np.sum(np.log(1 + np.square(weights - mu)/nu))
         prod_1 = 1
         prod_2 = 1
