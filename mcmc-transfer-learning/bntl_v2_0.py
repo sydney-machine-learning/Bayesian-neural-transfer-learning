@@ -7,6 +7,7 @@ import random
 import time
 from scipy.stats import multivariate_normal
 from scipy.stats import norm
+from scipy.special import gamma
 import os
 import sys
 import pickle
@@ -158,6 +159,8 @@ class BayesianTL(object):
     @staticmethod
     def log_t_dist(weights, mu, nu):
         part_1 = -(nu + 1) / 2 * np.sum(np.log(1 + np.square(weights - mu)/nu))
+        # part_2 = np.log(gamma((nu + 1)/2)) - np.log(np.sqrt(nu * np.pi)) - np.log(gamma(nu/2))
+        # log_pdf = part_1 + part_2
         prod_1 = 1
         prod_2 = 1
         for  i in range(1, nu/2):
@@ -167,16 +170,16 @@ class BayesianTL(object):
             part_2 = prod_1/(prod_2 * 2 * np.sqrt(nu))
         else:
             part_2 = prod_1/(prod_2 * np.pi * np.sqrt(nu))
-        pdf = part_1 + np.log(part_2)
-        return pdf
+        log_pdf = part_1 + np.log(part_2)
+        return log_pdf
 
     @staticmethod
-    def joint_prior_density(weights, mu, nu_squared):
+    def joint_prior_density(weights, mu, nu_squared, df):
         n = weights.shape[0]
         part_1 = -np.sum(np.square(weights - mu)) / (2 * nu_squared)
         part_2 = -n/2 * np.log(2 * np.pi * nu_squared)
         # loss = np.sum(np.log( 1 / (1 +  np.square((weights - mu))))) - part_1 - part_2
-        loss = self.log_t_dist(weights, mu) - part_1 - part_2
+        loss = BayesianTL.log_t_dist(weights, mu, df) - part_1 - part_2
         return loss
 
     @staticmethod
@@ -292,7 +295,7 @@ class BayesianTL(object):
         if type(mu) == type(None):
             prior_proposal = self.prior_function(weights_proposal, tau_proposal)
         else:
-            prior_proposal = self.joint_prior_density(weights_proposal, mu, self.nu_squared)
+            prior_proposal = self.joint_prior_density(weights_proposal, mu, self.nu_squared, self.degrees_of_freedom)
         difference_likelihood = likelihood_proposal - likelihood_current
         difference_prior = prior_proposal - prior_current
         mh_ratio = min(1, np.exp(min(709, difference_likelihood + difference_prior)))
@@ -368,7 +371,7 @@ class BayesianTL(object):
             source_prediction_test.append(self.neural_network.generate_output(self.source_test_data[index], source_weights_current[index]))
             source_eta[index] = np.log(np.var(source_prediction_train[index] - source_y_train[index]))
             source_tau_proposal[index] = np.exp(source_eta[index])
-            source_prior[index] = self.joint_prior_density(source_weights_current[index], joint_weights_current, self.nu_squared)  # takes care of the gradients
+            source_prior[index] = self.joint_prior_density(source_weights_current[index], joint_weights_current, self.nu_squared, self.degrees_of_freedom)  # takes care of the gradients
             [source_likelihood[index], source_rmse_train[index]] = self.likelihood_function(self.neural_network, self.source_train_data[index], source_weights_current[index], source_tau_proposal[index])
             source_rmse_test[index] = self.calculate_rmse(source_prediction_test[index], source_y_test[index])
 
@@ -383,7 +386,7 @@ class BayesianTL(object):
         target_prediction_test = self.neural_network.generate_output(self.target_test_data, target_weights_current)
         target_eta = np.log(np.var(target_prediction_train - target_y_train))
         target_tau_proposal = np.exp(target_eta)
-        target_prior = self.joint_prior_density(target_weights_current, joint_weights_current, self.nu_squared)
+        target_prior = self.joint_prior_density(target_weights_current, joint_weights_current, self.nu_squared, self.degrees_of_freedom)
         [target_likelihood, target_rmse_train] = self.likelihood_function(self.neural_network, self.target_train_data, target_weights_current, target_tau_proposal)
         target_rmse_test = self.calculate_rmse(target_prediction_test, target_y_test)
 
