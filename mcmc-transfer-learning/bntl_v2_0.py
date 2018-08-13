@@ -136,6 +136,7 @@ class BayesianTL(object):
         self.eta_stepsize = 0.01
         self.sigma_squared = 25
         self.nu_squared = 0.02
+        self.degrees_of_freedom = 2
         self.nu_1 = 0
         self.nu_2 = 0
         self.start = time.time()
@@ -155,11 +156,28 @@ class BayesianTL(object):
         return [mins, secs]
 
     @staticmethod
+    def log_t_dist(weights, mu):
+        nu = self.degrees_of_freedom
+        part_1 = -(nu + 1) / 2 * np.sum(np.log(1 + np.square(weights - mu)/nu))
+        prod_1 = 1
+        prod_2 = 1
+        for  i in range(1, nu/2):
+            prod_1 *= (nu - (2*i - 1))
+            prod_2 *= (nu - 2*i)
+        if nu % 2 == 0:
+            part_2 = prod_1/(prod_2 * 2 * np.sqrt(nu))
+        else:
+            part_2 = prod_1/(prod_2 * np.pi * np.sqrt(nu))
+        pdf = part_1 + np.log(part_2)
+        return pdf
+
+    @staticmethod
     def joint_prior_density(weights, mu, nu_squared):
         n = weights.shape[0]
         part_1 = -np.sum(np.square(weights - mu)) / (2 * nu_squared)
         part_2 = -n/2 * np.log(2 * np.pi * nu_squared)
-        loss = np.sum(np.log( 1 / (1 +  np.square((weights - mu))))) - part_1 - part_2
+        # loss = np.sum(np.log( 1 / (1 +  np.square((weights - mu))))) - part_1 - part_2
+        loss = self.log_t_dist(weights, mu) - part_1 - part_2
         return loss
 
     @staticmethod
@@ -203,9 +221,9 @@ class BayesianTL(object):
 
     @staticmethod
     def classification_prior(sigma_squared, weights):
-        part1 = -1 * ((weights.shape[0]) / 2) * np.log(sigma_squared)
-        part2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
-        log_loss = part1 - part2
+        part_1 = -1 * ((weights.shape[0]) / 2) * np.log(sigma_squared)
+        part_2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
+        log_loss = part_1 - part_2
         return log_loss
 
     @staticmethod
@@ -259,9 +277,9 @@ class BayesianTL(object):
         stdscr.refresh()
 
     def join_data(self):
-        train_data = self.target_train_data
-        test_data = self.target_test_data
-        for index in range(self.num_sources):
+        train_data = self.source_train_data[0]
+        test_data = self.source_test_data[0]
+        for index in range(1, self.num_sources):
             train_data = np.vstack([train_data, self.source_train_data[index]])
             test_data = np.vstack([test_data, self.source_test_data[index]])
         self.joint_train_data = train_data
@@ -614,7 +632,7 @@ if __name__ == '__main__':
     types = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
     num_samples = [8000, 10000, 4000, 12000]
 
-    problem = 3
+    problem = 1
     problem_type = types[problem]
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
@@ -629,10 +647,10 @@ if __name__ == '__main__':
         # stdscr.clear()
         # target_train_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
         # target_test_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-        # target_train_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        # target_test_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
-        target_train_data = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
-        target_test_data = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
+        target_train_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
+        target_test_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        # target_train_data = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
+        # target_test_data = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
         # target_train_data = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
         # target_test_data = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
 
@@ -641,10 +659,10 @@ if __name__ == '__main__':
         for index in range(num_sources[problem]):
             # train_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
             # test_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
-            # train_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
-            # test_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
-            train_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(index+1)+'.csv', delimiter=','))
-            test_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(index+1)+'.csv', delimiter=','))
+            train_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
+            test_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
+            # train_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(index+1)+'.csv', delimiter=','))
+            # test_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(index+1)+'.csv', delimiter=','))
             # train_data.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
             # test_data.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
             pass
@@ -658,7 +676,7 @@ if __name__ == '__main__':
         w_random = np.random.randn(bayesTL.wsize)
 
         # Start sampleEr
-        # bayesTL.mcmc_sampler(stdscr, w_random, save_knowledge=True)
+        bayesTL.mcmc_sampler(stdscr, w_random, save_knowledge=True)
 
         # display train and test accuracies
         bayesTL.display_rmse()
