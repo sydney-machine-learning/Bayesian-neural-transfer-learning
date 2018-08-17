@@ -44,18 +44,22 @@ class Experiment(object):
 
     # task equals 1 or 2
     def sampler_delta(self, task):
-        pass
-
-    def sampler_joint(self):
-        mu_c = self.mu
-        f_mu_c = self.f(mu_c)
-
         delta1_c, delta2_c = self.delta1, self.delta2
         f1_c = self.f(delta1_c)
         f2_c = self.f(delta2_c)
 
+    def sampler_joint(self):
+        mu_c = self.mu
+        f_mu_c = self.f(mu_c)
+        delta1_c, delta2_c = self.delta1, self.delta2
+        f1_c = self.f(delta1_c)
+        f2_c = self.f(delta2_c)
         mu_samples = np.zeros(self.num_samples)
         mu_samples[0] = mu_c
+        delta1_samples = np.zeros(self.num_samples)
+        delta1_samples[0] = delta1_c
+        delta2_samples = np.zeros(self.num_samples)
+        delta2_samples[0] = delta2_c
         for sample in range(1, self.num_samples):
             # Propose mu
             mu_p = mu_c + np.random.normal(0, self.s_sq)
@@ -68,10 +72,21 @@ class Experiment(object):
                 mu_c = mu_p
                 f_mu_c = f_mu_p
             mu_samples[sample] = mu_c
-
             # Propose delta1 and delta2
             delta1_p = np.random.normal(mu_c, self.s_sq)
             f1_p = self.f(delta1_p)
             delta2_p = np.random.normal(mu_c, self.s_sq)
             f2_p = self.f(delta2_p)
-            
+            # Calculate acceptance ratio for delta1 and delta2
+            alpha_delta_1 = self.acceptance_ratio_delta_joint(self.y1, f1_c, f1_p, delta1_c, delta1_p)
+            alpha_delta_2 = self.acceptance_ratio_delta_joint(self.y2, f2_c, f2_p, delta2_c, delta2_p)
+            u1, u2 = np.random.uniform(0,1,2)
+            if u1 < alpha_delta_1:
+                delta1_c = delta1_p
+                f1_c = f1_p
+            delta1_samples[sample] = delta1_c
+            if u2 < alpha_delta_2:
+                delia2_c = delta2_p
+                f2_c = f2_p
+            delta2_samples[sample] = delta2_c
+            return mu_samples, delta1_samples, delta2_samples
