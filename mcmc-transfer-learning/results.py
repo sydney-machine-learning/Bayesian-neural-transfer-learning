@@ -1,10 +1,10 @@
 import numpy as np
 
-path = input('Enter the path: ')
+path = raw_input('Enter the path: ')
 print('train_mu\tstdtrain\ttest_mu\t\tstdtest\t\ttrain_trf_mu\tstdtrain_trf\ttest_trf_mu\tstdtest_trf')
 
-rmsetrain_trf = np.genfromtxt(path+'/targettrftrainrmse.csv')
-rmsetest_trf = np.genfromtxt(path+'/targettrftestrmse.csv')
+rmsetrain_trf = np.genfromtxt(path+'/joint_train_rmse.csv')
+rmsetest_trf = np.genfromtxt(path+'/joint_test_rmse.csv')
 
 burnin = int(0.1 * rmsetrain_trf.shape[0])
 stdtrain_trf = rmsetrain_trf[burnin: ].std(axis=0)
@@ -14,8 +14,8 @@ rmsetest_trf_mu = rmsetest_trf[burnin: ].mean(axis=0)
 
 
 # rmse and std for w/o transfer results
-rmsetrain = np.genfromtxt(path+'/targettrainrmse.csv')
-rmsetest = np.genfromtxt(path+'/targettestrmse.csv')
+rmsetrain = np.genfromtxt(path+'/target_train_rmse.csv')
+rmsetest = np.genfromtxt(path+'/target_test_rmse.csv')
 burnin = int(0.1 * rmsetrain.shape[0])
 stdtrain = rmsetrain[burnin: ].std(axis=0)
 stdtest = rmsetest[burnin: ].std(axis=0)
