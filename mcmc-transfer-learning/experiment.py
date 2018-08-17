@@ -46,10 +46,14 @@ class Experiment(object):
     def sampler_delta(self, task):
         pass
 
-    def smapler_joint(self):
+    def sampler_joint(self):
         mu_c = self.mu
         f_mu_c = self.f(mu_c)
+
         delta1_c, delta2_c = self.delta1, self.delta2
+        f1_c = self.f(delta1_c)
+        f2_c = self.f(delta2_c)
+
         mu_samples = np.zeros(self.num_samples)
         mu_samples[0] = mu_c
         for sample in range(1, self.num_samples):
@@ -66,4 +70,8 @@ class Experiment(object):
             mu_samples[sample] = mu_c
 
             # Propose delta1 and delta2
+            delta1_p = np.random.normal(mu_c, self.s_sq)
+            f1_p = self.f(delta1_p)
+            delta2_p = np.random.normal(mu_c, self.s_sq)
+            f2_p = self.f(delta2_p)
             
