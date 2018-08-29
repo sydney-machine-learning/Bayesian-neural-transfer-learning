@@ -13,24 +13,21 @@ import sys
 
 class Experiment(object):
     def __init__(self, num_samples = 2000):
+        self.num_tasks = 2
         self.mu = 0
-        self.n_1 = 80
-        self.n_2 = 20
+        self.num_obv = np.array([80, 20])
         self.sigma_mu_sq = 25
         self.sigma_delta_sq = 1
         self.tau_sq = 0.1
         self.s_delta_sq = 0.05
         self.s_mu_sq = 0.05
-        self.delta_1, self.delta_2 = np.random.normal(self.mu, np.sqrt(self.sigma_delta_sq), 2)
-        self.f_1 = self.func(self.delta_1)
-        self.f_2 = self.func(self.delta_2)
-        self.y_1 = np.random.normal(self.f_1, np.sqrt(self.tau_sq), self.n_1)
-        self.y_2 = np.random.normal(self.f_2, np.sqrt(self.tau_sq), self.n_2)
-        self.Y = np.concatenate((self.y_1, self.y_2), axis=0)
+        self.delta = np.random.normal(self.mu, np.sqrt(self.sigma_delta_sq), self.num_tasks)
+        self.fx = self.func(self.delta)
+        self.y = [np.random.normal(self.fx[task], np.sqrt(self.tau_sq), self.num_obv[task]) for task in range(self.num_tasks)]
+        self.Y = np.concatenate(self.y, axis=0)
         self.F = self.func(self.mu)
         self.num_samples = num_samples
-        self.delta_file_1 = 'delta_1.csv'
-        self.delta_file_2 = 'delta_2.csv'
+        self.delta_files = ['delta_'+str(task+1)+'.csv']
         self.mu_file = 'mu.csv'
         self.joint_file ='joint_sampling.csv'
 
@@ -43,17 +40,17 @@ class Experiment(object):
     #     alpha = np.exp(-0.5/self.tau_sq * (np.sum(np.square(y - fx_p)) - np.sum(np.square(y - fx_c))))
     #     return alpha
 
-    def joint_likelihood(self, y_1, f_1, y_2, f_2, tau_sq):
-        log_likelihood = np.sum(norm.logpdf(f_1, y_1, np.sqrt(tau_sq))) + np.sum(norm.logpdf(f_2, y_2, np.sqrt(tau_sq)))
+    def joint_likelihood(self, y, f, tau_sq):
+        log_likelihood = np.sum(np.array([np.sum(norm.logpdf(f[task], y[task], np.sqrt(tau_sq))) for task in range(self.num_tasks)]))
         return log_likelihood
 
-    def joint_prior(self, delta_1, delta_2, mu, sigma_sq):
-        log_prior = np.sum(norm.logpdf(delta_1, mu, np.sqrt(sigma_sq))) + np.sum(norm.logpdf(delta_2, mu, np.sqrt(sigma_sq)))
+    def joint_prior(self, delta, mu, sigma_sq):
+        log_prior = np.sum(np.array([norm.logpdf(delta[task], mu, np.sqrt(sigma_sq)) for task in range(self.num_tasks)]))
         return log_prior
 
-    def joint_acceptance_ratio(self, delta_1_c, delta_2_c, delta_1_p, delta_2_p, y_1, y_2, f_delta_1_c, f_delta_1_p, f_delta_2_c, f_delta_2_p, mu_c, tau_sq, sigma_sq):
-        diff_likelihood = self.joint_likelihood(y_1, f_delta_1_p, y_2, f_delta_2_p, tau_sq) - self.joint_likelihood(y_1, f_delta_1_c, y_2, f_delta_2_c, tau_sq)
-        diff_prior = self.joint_prior(delta_1_p, delta_2_p, mu_c, sigma_sq) - self.joint_prior(delta_1_c, delta_2_c, mu_c, sigma_sq)
+    def joint_acceptance_ratio(self, delta_c, delta_p, y, f_c, f_p, mu, tau_sq, sigma_sq):
+        diff_likelihood = self.joint_likelihood(y, f_p, tau_sq) - self.joint_likelihood(y, f_c, tau_sq)
+        diff_prior = self.joint_prior(delta_p, mu, sigma_sq) - self.joint_prior(delta_c, mu, sigma_sq)
         alpha = min(1, np.exp(diff_likelihood + diff_prior))
         return alpha
 
@@ -86,39 +83,34 @@ class Experiment(object):
         tau_sq_c = self.tau_sq
         sigma_sq_c = self.sigma_delta_sq
         mu = self.mu
-        delta_1_c, delta_2_c = self.delta_1, self.delta_2
-        f_delta_1_c = self.f_1
-        f_delta_2_c = self.f_2
+        delta_c = self.delta
+        fx_c = self.fx
         file = open(self.joint_file, 'w')
         for sample in range(1, self.num_samples):
             # Propose delta_1 and delta_2
-            delta_1_p = delta_1_c + np.random.normal(0, self.s_delta_sq)
-            delta_2_p = delta_2_c + np.random.normal(0, self.s_delta_sq)
+            delta_p = delta_c + np.random.normal(0, self.s_delta_sq, self.num_tasks)
             # Evaluate function f
-            f_delta_1_p = self.func(delta_1_p)
-            f_delta_2_p = self.func(delta_2_p)
+            fx_p = self.func(delta_p)
             # get joint acceptance ratio value
-            alpha = self.joint_acceptance_ratio(delta_1_c, delta_2_c, delta_1_p, delta_2_p, self.y_1, self.y_2, f_delta_1_c, f_delta_1_p, f_delta_2_c, f_delta_2_p, mu, tau_sq_c, sigma_sq_c)
+            alpha = self.joint_acceptance_ratio(delta_c, delta_p, self.y, fx_c, fx_p, mu, tau_sq_c, sigma_sq_c)
             u = np.random.uniform(0, 1)
             if u < alpha:
-                delta_1_c = delta_1_p
-                delta_2_c = delta_2_p
-                f_delta_1_c = f_delta_1_p
-                f_delta_2_c = f_delta_2_p
+                delta_c = delta_p
+                fx_c = fx_p
             # Drawing tau_sq
-            tau_a = (self.n_1 + self.n_2)/2 + tau_a_prior;
+            tau_a = np.sum(self.num_obv)/2 + tau_a_prior;
             tau_b = tau_b_prior
-            tau_b = tau_b + np.sum(np.square(self.y_1 - delta_1_c))/2 + np.sum(np.square(self.y_2 - delta_2_c))/2
+            tau_b = tau_b + np.sum(np.array([np.sum(np.square(self.y[task] - delta_c[task]))/2 for task in range(self.num_tasks)]))
             tau_sq_c = 1 / np.random.gamma(tau_a, tau_b)
             # Save weights
-            weights = np.array([delta_1_c, delta_2_c, mu]).reshape(1, 3)
+            weights = np.concatenate((delta_c, np.array([mu]))).reshape(1, self.num_tasks + 1)
             np.savetxt(file, weights, delimiter=',')
             print('weights: ', weights)
             # Draw mu
-            mu = np.random.normal((delta_1_c + delta_2_c)/2, np.sqrt(sigma_sq_c/2))
+            mu = np.random.normal(delta_c.mean(), np.sqrt(sigma_sq_c/2))
             # Drawing sigma_sq
             sig_a = 2/2 + sig_a_prior
-            sig_b = (np.square(delta_1_c - mu) + np.square(delta_2_c - mu))/2 + sig_b_prior
+            sig_b = np.sum(np.square(delta_c - mu))/2 + sig_b_prior
             sigma_sq_c = 1 / np.random.gamma(sig_a, sig_b);
 
         file.close()
@@ -144,13 +136,13 @@ class Experiment(object):
         burnin = int(0.1 * self.num_samples)
         ax = plt.subplot(311)
         plt.title('Weight Density plot')
-        plt.hist(weights[burnin:, 0], bins=50, alpha=0.7, facecolor='sandybrown', edgecolor='r', label='source', density=False)
+        plt.hist(weights[burnin:, 0], bins=50, alpha=0.7, facecolor='sandybrown', edgecolor='r', label='source', density=True)
         plt.legend()
         ax = plt.subplot(312)
-        plt.hist(weights[burnin:, 1], bins=50, alpha=0.7, facecolor='C0', edgecolor='b', label='target', density=False)
+        plt.hist(weights[burnin:, 1], bins=50, alpha=0.7, facecolor='C0', edgecolor='b', label='target', density=True)
         plt.legend()
         ax = plt.subplot(313)
-        plt.hist(weights[burnin:, 2], bins=50, alpha=0.7, facecolor='C8', edgecolor='g', label='mu', density=False)
+        plt.hist(weights[burnin:, 2], bins=50, alpha=0.7, facecolor='C8', edgecolor='g', label='mu', density=True)
         plt.legend()
         plt.xlabel('Parameter value')
         plt.ylabel('Density')
