@@ -1,4 +1,4 @@
-# !/usr/bin/python
+topology# !/usr/bin/python
 from __future__ import division, print_function
 import matplotlib
 matplotlib.use('Agg')
@@ -11,30 +11,125 @@ from scipy.special import gamma
 import os
 import sys
 
+#----------------------------------------------------- Neural Network Class-------------------------------------------------------
+class Network(object):
+
+    def __init__(self, topology, learn_rate = 0.5, alpha = 0.1):
+        self.topology = topology  # NN topology [input, hidden, output]
+        np.random.seed(int(time.time()))
+        self.W1 = np.random.randn(self.topology[0], self.topology[1]) / np.sqrt(self.topology[0])
+        self.B1 = np.random.randn(1, self.topology[1]) / np.sqrt(self.topology[1])  # bias first layer
+        self.W2 = np.random.randn(self.topology[1], self.topology[2]) / np.sqrt(self.topology[1])
+        self.B2 = np.random.randn(1, self.topology[2]) / np.sqrt(self.topology[1])  # bias second layer
+
+        self.hidout = np.zeros((1, self.topology[1]))  # output of first hidden layer
+        self.out = np.zeros((1, self.topology[2]))  # output last layer
+
+    @staticmethod
+    def sigmoid(x):
+        x = x.astype(np.float128)
+        return 1 / (1 + np.exp(-x))
+
+    def sampleEr(self, actualout):
+        error = np.subtract(self.out, actualout)
+        sqerror = np.sum(np.square(error)) / self.topology[2]
+        return sqerror
+
+    def sampleAD(self, actualout):
+        error = np.subtract(self.out, actualout)
+        moderror = np.sum(np.abs(error)) / self.topology[2]
+        return moderror
+
+    def ForwardPass(self, X):
+        z1 = X.dot(self.W1) - self.B1
+        self.hidout = self.sigmoid(z1)  # output of first hidden layer
+        z2 = self.hidout.dot(self.W2) - self.B2
+        self.out = self.sigmoid(z2)  # output second hidden layer
+
+    def BackwardPass(self, Input, desired):
+        out_delta = (desired - self.out) * (self.out * (1 - self.out))
+        hid_delta = out_delta.dot(self.W2.T) * (self.hidout * (1 - self.hidout))
+        self.W2 += (self.hidout.T.dot(out_delta) * self.lrate)
+        self.B2 += (-1 * self.lrate * out_delta)
+        self.W1 += (Input.T.dot(hid_delta) * self.lrate)
+        self.B1 += (-1 * self.lrate * hid_delta)
+
+    def decode(self, w):
+        w_layer1size = self.topology[0] * self.topology[1]
+        w_layer2size = self.topology[1] * self.topology[2]
+
+        w_layer1 = w[0:w_layer1size]
+
+        self.W1 = np.reshape(w_layer1, (self.topology[0], self.topology[1]))
+        w_layer2 = w[w_layer1size:w_layer1size + w_layer2size]
+        self.W2 = np.reshape(w_layer2, (self.topology[1], self.topology[2]))
+        self.B1 = w[w_layer1size + w_layer2size :w_layer1size + w_layer2size + self.topology[1]]
+        self.B2 = w[w_layer1size + w_layer2size + self.topology[1] :w_layer1size + w_layer2size + self.topology[1] + self.topology[2]]
+
+    def encode(self):
+        w1 = self.W1.ravel()
+        w2 = self.W2.ravel()
+        w = np.concatenate([w1, w2, self.B1, self.B2])
+        return w
+
+    @staticmethod
+    def scale_data(data, maxout=1, minout=0, maxin=1, minin=0):
+        attribute = data[:]
+        attribute = minout + (attribute - minin)*((maxout - minout)/(maxin - minin))
+        return attribute
+
+    @staticmethod
+    def denormalize(data, indices, maxval, minval):
+        for i in range(len(indices)):
+            index = indices[i]
+            attribute = data[:, index]
+            attribute = Network.scale_data(attribute, maxout=maxval[i], minout=minval[i], maxin=1, minin=0)
+            data[:, index] = attribute
+        return data
+
+    @staticmethod
+    def softmax(fx):
+        ex = np.exp(fx)
+        sum_ex = np.sum(ex, axis = 1)
+        sum_ex = np.multiply(np.ones(ex.shape), sum_ex[:, np.newaxis])
+        prob = np.divide(ex, sum_ex)
+        return prob
+
+    def generate_output(self, data, w):  # BP with SGD (Stocastic BP)
+        self.decode(w)  # method to decode w into W1, W2, B1, B2.
+        size = data.shape[0]
+        Input = np.zeros((1, self.topology[0]))  # temp hold input
+        Desired = np.zeros((1, self.topology[2]))
+        fx = np.zeros((size,self.topology[2]))
+        for i in range(0, size):  # to see what fx is produced by your current weight update
+            Input = data[i, 0:self.topology[0]]
+            self.ForwardPass(Input)
+            fx[i] = self.out
+        return fx
+
+#---------------------------------------------------------Experiment Sampler-----------------------------------------------------
 class Experiment(object):
-    def __init__(self, num_samples = 2000):
+    def __init__(self, topology, train_data, test_data, num_samples = 2000):
+        self.train_data = train_data
+        self.topology = topology
+        self.neural_network = Network(topology)
         self.num_tasks = 2
-        self.mu = 0
-        self.num_obv = np.array([80, 20])
+        self.mu = np.zeros(self.num_tasks)
+        self.num_obv = np.array([train_data[task].shape[0] for task in range(self.num_tasks)])
         self.sigma_mu_sq = 25
-        self.sigma_delta_sq = 1
+        self.sigma_sq = 1
         self.tau_sq = 0.1
-        self.s_delta_sq = 0.05
         self.s_mu_sq = 0.05
-        self.delta = np.random.normal(self.mu, np.sqrt(self.sigma_delta_sq), self.num_tasks)
-        self.fx = self.func(self.delta)
-        self.y = [np.random.normal(self.fx[task], np.sqrt(self.tau_sq), self.num_obv[task]) for task in range(self.num_tasks)]
+        self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
+        self.delta = np.random.normal(self.mu, np.sqrt(self.sigma_sq), (self.num_tasks, self.w_size))
+        self.fx = [self.neural_network.generate_output(self.train_data[task], delta[task]) for task in range(self.num_tasks)]
+        self.y = [self.train_data[task][:, self.topology[0]: self.topology[0]+self.topology[2]] for task in range(self.num_tasks)]
         self.Y = np.concatenate(self.y, axis=0)
-        self.F = self.func(self.mu)
+        # self.F = self.neural_network.generate_output(self.Y, self.mu)
         self.num_samples = num_samples
         self.delta_files = ['delta_'+str(task+1)+'.csv' for task in range(self.num_tasks)]
         self.mu_file = 'mu.csv'
         self.joint_file ='joint_sampling.csv'
-
-    @staticmethod
-    def func(delta):
-        fx =  1 / (1 + np.exp(delta))
-        return fx
 
     # def task_acceptance_ratio(self, y, fx_c, fx_p):
     #     alpha = np.exp(-0.5/self.tau_sq * (np.sum(np.square(y - fx_p)) - np.sum(np.square(y - fx_c))))
@@ -81,16 +176,16 @@ class Experiment(object):
         tau_a_prior = 2
         tau_b_prior = 2 * tau_a_prior
         tau_sq_c = self.tau_sq
-        sigma_sq_c = self.sigma_delta_sq
+        sigma_sq_c = self.sigma_sq
         mu = self.mu
         delta_c = self.delta
         fx_c = self.fx
         file = open(self.joint_file, 'w')
         for sample in range(1, self.num_samples):
             # Propose delta_1 and delta_2
-            delta_p = delta_c + np.random.normal(0, self.s_delta_sq, self.num_tasks)
+            delta_p = delta_c + np.random.normal(0, self.s_delta_sq, (self.num_tasks, self.w_size))
             # Evaluate function f
-            fx_p = self.func(delta_p)
+            fx_p = [self.neural_network.generate_output(self.train_data[task], delta_p[task]) for task in range(self.num_tasks)]
             # get joint acceptance ratio value
             alpha = self.joint_acceptance_ratio(delta_c, delta_p, self.y, fx_c, fx_p, mu, tau_sq_c, sigma_sq_c)
             u = np.random.uniform(0, 1)
@@ -103,11 +198,11 @@ class Experiment(object):
             tau_b = tau_b + np.sum(np.array([np.sum(np.square(self.y[task] - delta_c[task]))/2 for task in range(self.num_tasks)]))
             tau_sq_c = 1 / np.random.gamma(tau_a, tau_b)
             # Save weights
-            weights = np.concatenate((delta_c, np.array([mu]))).reshape(1, self.num_tasks + 1)
-            np.savetxt(file, weights, delimiter=',')
-            print('weights: ', weights)
+            # weights = np.concatenate((delta_c, np.array([mu]))).reshape(1, self.num_tasks + 1)
+            # np.savetxt(file, weights, delimiter=',')
+            # print('weights: ', weights)
             # Draw mu
-            mu = np.random.normal(delta_c.mean(), np.sqrt(sigma_sq_c/2))
+            mu = np.random.normal(delta_c.mean(axis=0), np.sqrt(sigma_sq_c/2))
             # Drawing sigma_sq
             sig_a = self.num_tasks/2 + sig_a_prior
             sig_b = np.sum(np.square(delta_c - mu))/2 + sig_b_prior
