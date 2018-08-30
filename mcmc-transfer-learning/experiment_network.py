@@ -232,11 +232,10 @@ class Experiment(object):
 
         weights = np.genfromtxt(self.joint_file, delimiter=',')
         burnin = int(0.1 * self.num_samples)
+        ax = plt.subplot(1, 1,1)
         for task in range(self.num_tasks):
-            ax = plt.subplot(self.num_tasks+1, 1, task+1)
-            plt.hist(weights[burnin:, task], bins=50, alpha=0.7, facecolor='sandybrown', edgecolor='r', label='task '+str(task+1), density=True)
+            plt.hist(weights[burnin:, task], bins=50, alpha=0.7, label='task '+str(task+1), density=True)
             plt.legend()
-        ax = plt.subplot(self.num_tasks+1, 1, self.num_tasks+1)
         plt.hist(weights[burnin:, 2], bins=50, alpha=0.7, facecolor='C8', edgecolor='g', label='mu', density=True)
         plt.legend()
         plt.xlabel('Parameter value')
@@ -268,5 +267,5 @@ if __name__ == '__main__':
     # for task in range(1, 4):
     #     experiment.task_sampler(task)
     print('Starting joint sampling...')
-    experiment.joint_sampler()
+    # experiment.joint_sampler()
     experiment.plot_histogram()
