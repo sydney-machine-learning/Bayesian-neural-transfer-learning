@@ -1,4 +1,4 @@
-topology# !/usr/bin/python
+# !/usr/bin/python
 from __future__ import division, print_function
 import matplotlib
 matplotlib.use('Agg')
@@ -111,25 +111,26 @@ class Network(object):
 class Experiment(object):
     def __init__(self, topology, train_data, test_data, num_samples = 2000):
         self.train_data = train_data
+        self.test_data = test_data
         self.topology = topology
         self.neural_network = Network(topology)
         self.num_tasks = 2
-        self.mu = np.zeros(self.num_tasks)
+        self.w_size = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
+        self.mu = np.zeros(self.w_size)
         self.num_obv = np.array([train_data[task].shape[0] for task in range(self.num_tasks)])
         self.sigma_mu_sq = 25
         self.sigma_sq = 1
         self.tau_sq = 0.1
-        self.s_mu_sq = 0.05
-        self.wsize = (topology[0] * topology[1]) + (topology[1] * topology[2]) + topology[1] + topology[2]
+        self.s_sq = 0.05
         self.delta = np.random.normal(self.mu, np.sqrt(self.sigma_sq), (self.num_tasks, self.w_size))
-        self.fx = [self.neural_network.generate_output(self.train_data[task], delta[task]) for task in range(self.num_tasks)]
+        self.fx = [self.neural_network.generate_output(self.train_data[task], self.delta[task]) for task in range(self.num_tasks)]
         self.y = [self.train_data[task][:, self.topology[0]: self.topology[0]+self.topology[2]] for task in range(self.num_tasks)]
         self.Y = np.concatenate(self.y, axis=0)
         # self.F = self.neural_network.generate_output(self.Y, self.mu)
         self.num_samples = num_samples
         self.delta_files = ['delta_'+str(task+1)+'.csv' for task in range(self.num_tasks)]
         self.mu_file = 'mu.csv'
-        self.joint_file ='joint_sampling.csv'
+        self.joint_file ='joint_sampling_network.csv'
 
     # def task_acceptance_ratio(self, y, fx_c, fx_p):
     #     alpha = np.exp(-0.5/self.tau_sq * (np.sum(np.square(y - fx_p)) - np.sum(np.square(y - fx_c))))
@@ -145,8 +146,9 @@ class Experiment(object):
 
     def joint_acceptance_ratio(self, delta_c, delta_p, y, f_c, f_p, mu, tau_sq, sigma_sq):
         diff_likelihood = self.joint_likelihood(y, f_p, tau_sq) - self.joint_likelihood(y, f_c, tau_sq)
+        print("Likelihood: {}".format(self.joint_likelihood(y, f_c, tau_sq)), end=' ')
         diff_prior = self.joint_prior(delta_p, mu, sigma_sq) - self.joint_prior(delta_c, mu, sigma_sq)
-        alpha = min(1, np.exp(diff_likelihood + diff_prior))
+        alpha = min(1, np.exp(min(709, diff_likelihood + diff_prior)))
         return alpha
 
     # task equals 1, 2 or 3
@@ -183,7 +185,7 @@ class Experiment(object):
         file = open(self.joint_file, 'w')
         for sample in range(1, self.num_samples):
             # Propose delta_1 and delta_2
-            delta_p = delta_c + np.random.normal(0, self.s_delta_sq, (self.num_tasks, self.w_size))
+            delta_p = delta_c + np.random.normal(0, self.s_sq, (self.num_tasks, self.w_size))
             # Evaluate function f
             fx_p = [self.neural_network.generate_output(self.train_data[task], delta_p[task]) for task in range(self.num_tasks)]
             # get joint acceptance ratio value
@@ -195,18 +197,19 @@ class Experiment(object):
             # Drawing tau_sq
             tau_a = np.sum(self.num_obv)/2 + tau_a_prior;
             tau_b = tau_b_prior
-            tau_b = tau_b + np.sum(np.array([np.sum(np.square(self.y[task] - delta_c[task]))/2 for task in range(self.num_tasks)]))
+            tau_b = tau_b + np.sum(np.array([np.sum(np.square(self.y[task] - fx_c[task]))/2 for task in range(self.num_tasks)]))
             tau_sq_c = 1 / np.random.gamma(tau_a, tau_b)
             # Save weights
-            # weights = np.concatenate((delta_c, np.array([mu]))).reshape(1, self.num_tasks + 1)
-            # np.savetxt(file, weights, delimiter=',')
-            # print('weights: ', weights)
+            weights = np.concatenate((delta_c[:, 10], np.array([mu[10]]))).reshape(1, self.num_tasks + 1)
+            np.savetxt(file, weights, delimiter=',')
+            print('weights: ', weights, end=' ' )
             # Draw mu
             mu = np.random.normal(delta_c.mean(axis=0), np.sqrt(sigma_sq_c/2))
             # Drawing sigma_sq
             sig_a = self.num_tasks/2 + sig_a_prior
             sig_b = np.sum(np.square(delta_c - mu))/2 + sig_b_prior
-            sigma_sq_c = 1 / np.random.gamma(sig_a, sig_b);
+            sigma_sq_c = 1 / np.random.gamma(sig_a, sig_b)
+            print ("Samples: {}".format(sample))
 
         file.close()
         return
@@ -238,17 +241,29 @@ class Experiment(object):
         plt.legend()
         plt.xlabel('Parameter value')
         plt.ylabel('Density')
-        plt.savefig('joint_weight.png')
+        plt.savefig('joint_weight_network.png')
         plt.clf()
 
 
 if __name__ == '__main__':
-    num_samples = 11000
+    num_samples = 20000
+    topology = [4, 25, 1]
+    train_data = []
+    test_data = []
+    index = 3
+    train_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(index+1)+'.csv', delimiter=','))
+    train_data.append(np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=','))
+
+    test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
+    test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
+
+    random.seed(time.time())
+
     print("Initializing... ")
-    experiment = Experiment(num_samples)
+    experiment = Experiment(topology, train_data, test_data, num_samples)
     # print("Initialized! Now running sampler..")
     # for task in range(1, 4):
     #     experiment.task_sampler(task)
-    print('Starting joint smapling...')
+    print('Starting joint sampling...')
     experiment.joint_sampler()
     experiment.plot_histogram()

@@ -100,7 +100,7 @@ class Experiment(object):
             # Drawing tau_sq
             tau_a = np.sum(self.num_obv)/2 + tau_a_prior;
             tau_b = tau_b_prior
-            tau_b = tau_b + np.sum(np.array([np.sum(np.square(self.y[task] - delta_c[task]))/2 for task in range(self.num_tasks)]))
+            tau_b = tau_b + np.sum(np.array([np.sum(np.square(self.y[task] - fx_c[task]))/2 for task in range(self.num_tasks)]))
             tau_sq_c = 1 / np.random.gamma(tau_a, tau_b)
             # Save weights
             weights = np.concatenate((delta_c, np.array([mu]))).reshape(1, self.num_tasks + 1)
