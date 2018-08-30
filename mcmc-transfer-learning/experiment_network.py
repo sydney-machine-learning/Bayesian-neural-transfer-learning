@@ -121,7 +121,7 @@ class Experiment(object):
         self.sigma_mu_sq = 25
         self.sigma_sq = 1
         self.tau_sq = 0.1
-        self.s_sq = 0.05
+        self.step_size = 0.02
         self.delta = np.random.normal(self.mu, np.sqrt(self.sigma_sq), (self.num_tasks, self.w_size))
         self.fx = [self.neural_network.generate_output(self.train_data[task], self.delta[task]) for task in range(self.num_tasks)]
         self.y = [self.train_data[task][:, self.topology[0]: self.topology[0]+self.topology[2]] for task in range(self.num_tasks)]
@@ -185,7 +185,7 @@ class Experiment(object):
         file = open(self.joint_file, 'w')
         for sample in range(1, self.num_samples):
             # Propose delta_1 and delta_2
-            delta_p = delta_c + np.random.normal(0, self.s_sq, (self.num_tasks, self.w_size))
+            delta_p = delta_c + np.random.normal(0, self.step_size, (self.num_tasks, self.w_size))
             # Evaluate function f
             fx_p = [self.neural_network.generate_output(self.train_data[task], delta_p[task]) for task in range(self.num_tasks)]
             # get joint acceptance ratio value
@@ -246,8 +246,8 @@ class Experiment(object):
 
 
 if __name__ == '__main__':
-    num_samples = 20000
-    topology = [4, 25, 1]
+    num_samples = 25000
+    topology = [4, 15, 1]
     train_data = []
     test_data = []
     index = 3
@@ -256,6 +256,9 @@ if __name__ == '__main__':
 
     test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
     test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
+
+
+
 
     random.seed(time.time())
 
