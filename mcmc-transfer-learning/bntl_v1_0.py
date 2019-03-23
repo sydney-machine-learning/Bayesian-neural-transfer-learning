@@ -34,7 +34,7 @@ class Network(object):
 
     @staticmethod
     def sigmoid(x):
-        x = x.astype(np.float128)
+        x = x.astype(np.float64)
         return 1 / (1 + np.exp(-x))
 
     def sampleEr(self, actualout):
@@ -721,9 +721,9 @@ if __name__ == '__main__':
     output = [10, 2, 1, 1]
     num_sources = [1, 1, 1, 5]
     type = {0:'classification', 1:'regression', 2:'regression', 3:'regression'}
-    num_samples = [8000, 100, 4000, 8000]
+    num_samples = [8000, 10000, 4000, 8000]
 
-    problem = 1
+    problem = 0
     problem_type = type[problem]
     topology = [input[problem], hidden[problem], output[problem]]
     problem_name = name[problem]
@@ -738,10 +738,10 @@ if __name__ == '__main__':
 
     try:
         # stdscr.clear()
-        # target_train_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
-        # target_test_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
-        target_train_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-        target_test_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+        target_train_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
+        target_test_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+        # target_train_data = np.genfromtxt('..\\datasets\\UJIndoorLoc\\targetData\\0train.csv', delimiter=',')[:, :-2]
+        # target_test_data = np.genfromtxt('..\\datasets\\UJIndoorLoc\\targetData\\0test.csv', delimiter=',')[:, :-2]
         # target_train_data = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
         # target_test_data = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
         # target_train_data = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
@@ -750,10 +750,10 @@ if __name__ == '__main__':
         train_data = []
         test_data = []
         for index in range(num_sources[problem]):
-            # train_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
-            # test_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
-            train_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
-            test_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
+            train_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
+            test_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
+            # train_data.append(np.genfromtxt('..\\datasets\\UJIndoorLoc\\sourceData\\'+str(index)+'train.csv', delimiter=',')[:, :-2])
+            # test_data.append(np.genfromtxt('..\\datasets\\UJIndoorLoc\\sourceData\\'+str(index)+'test.csv', delimiter=',')[:, :-2])
             # train_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(i+1)+'.csv', delimiter=','))
             # test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
             # train_data.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
