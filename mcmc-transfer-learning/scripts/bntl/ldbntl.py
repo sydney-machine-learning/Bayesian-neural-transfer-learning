@@ -41,6 +41,7 @@ class Network(object):
 		x = x.astype(np.float128)
 		sig =  1 / (1 + np.exp(-x))
 		return sig
+		
 	def sampleEr(self, actualout):
 		error = np.subtract(self.out, actualout)
 		sqerror = np.sum(np.square(error)) / self.Top[2]
@@ -165,7 +166,10 @@ class BayesianTL(object):
 		self.num_sources = num_sources
 		self.type = _type
 		self.args = args
-		self.directory = directory + "_" + args.run_id
+		if args.langevin:
+			self.directory = os.path.join(args.root_dir, "mcmc-transfer-learning/exp/"+directory + "_lg_" + str(args.langevin_ratio) + "_" + args.run_id)
+		else:
+			self.directory = os.path.join(args.root_dir, "mcmc-transfer-learning/exp/"+directory + "_" + args.run_id)	
 		self.create_directory(self.directory)
 		self.sgd_depth = 1
 		self.langevin_ratio = args.langevin_ratio
@@ -232,7 +236,7 @@ class BayesianTL(object):
 
 	@staticmethod
 	def calculate_nmse(predictions, desired):
-		return np.sum((desired - predictions) ** 2)/np.sum((desired - np.mean(desired)) ** 2)
+		return np.mean((desired - predictions) ** 2)/(desired.mean()*predictions.mean())
 
 	# Calculates Euclidian distance between points
 	@staticmethod
@@ -278,8 +282,6 @@ class BayesianTL(object):
 
 	@staticmethod
 	def classification_prior(sigma_squared, weights):
-		# h = self.topology[1]  # number hidden neurons
-		# d = self.topology[0]  # number input neurons
 		part1 = -1 * ((weights.shape[0]) / 2) * np.log(sigma_squared)
 		part2 = 1 / (2 * sigma_squared) * (sum(np.square(weights)))
 		log_loss = part1 - part2
@@ -288,12 +290,7 @@ class BayesianTL(object):
 	@staticmethod
 	def gaussian_likelihood(neural_network, data, weights, tausq):
 		desired = data[:, neural_network.Top[0]: neural_network.Top[0] + neural_network.Top[2]]
-		# y_m = data[:, 522:524]
 		prediction = neural_network.evaluate_proposal(data, weights)
-		# fx_m = Network.denormalize(fx.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
-		# y_m = Network.denormalize(y.copy(), [0,1], maxval=[-7299.786516730871000, 4865017.3646842018], minval=[-7695.9387549299299000, 4864745.7450159714])
-		# np.savetxt('y.txt', y, delimiter=',')
-		# rmse = self.distance(fx_m, y_m)
 		rmse = BayesianTL.calculate_rmse(prediction, desired)
 		loss = -0.5 * np.log(2 * np.pi * tausq) - 0.5 * np.square(desired - prediction) / tausq
 		return [np.sum(loss), rmse]
@@ -414,6 +411,7 @@ class BayesianTL(object):
 		start = time.time()
 
 		source_eta = np.zeros((self.num_sources))
+
 		source_tau_proposal = np.zeros((self.num_sources))
 		source_prior = np.zeros((self.num_sources))
 		source_likelihood = np.zeros((self.num_sources))
@@ -510,6 +508,8 @@ class BayesianTL(object):
 		target_trf_num_accept = 0
 		num_transfer_accepted = 0
 		num_transfer_attempts = 0
+		num_langevin_samples = 0
+		num_langevin_accepted = 0
 
 		# Add weights that are to be saved
 		for index in range(self.num_sources):
@@ -549,6 +549,7 @@ class BayesianTL(object):
 			uniform_value = np.random.uniform(0, 1)
 			
 			if self.args.langevin and self.langevin_ratio > uniform_value:
+				num_langevin_samples += 1
 				if not self.args.no_transfer:
 					# print("Langevin Interval... sample {}".format(sample))
 					for index in range(self.num_sources):
@@ -564,11 +565,14 @@ class BayesianTL(object):
 						first = -0.5 * np.sum(wc_delta  *  wc_delta  ) / sigma_sq  # this is wc_delta.T  *  wc_delta /sigma_sq
 						second = -0.5 * np.sum(wp_delta * wp_delta ) / sigma_sq
 						difference_proposal[index] =  first - second
-					
-					source_tau_proposal = np.exp(source_eta)
+
+					source_eta_proposal = source_eta + np.random.normal(0, self.eta_stepsize, 1)
+					source_tau_proposal = np.exp(source_eta_proposal)
 
 					target_trf_weights_current_gd = self.target.langevin_gradient(self.target_train_data, target_trf_weights_current.copy(), self.sgd_depth)
 					target_trf_weights_proposal = target_trf_weights_current_gd + np.random.normal(0, self.weights_stepsize, self.target_wsize)
+					target_trf_weights_proposal_gd = self.target.langevin_gradient(self.target_train_data, target_trf_weights_proposal.copy(), self.sgd_depth)
+
 					
 					wc_delta = (target_trf_weights_current - target_trf_weights_proposal_gd) 
 					wp_delta = (target_trf_weights_proposal - target_trf_weights_current_gd)
@@ -579,11 +583,12 @@ class BayesianTL(object):
 					difference_proposal_target_trf =  first - second
 					
 					target_trf_eta_proposal = target_trf_eta + np.random.normal(0, self.eta_stepsize, 1)
-					target_trf_tau_proposal = np.exp(target_trf_eta)
+					target_trf_tau_proposal = np.exp(target_trf_eta_proposal)
 				
 				if not self.args.transfer_only:
 					target_weights_current_gd = self.target.langevin_gradient(self.target_train_data, target_weights_current.copy(), self.sgd_depth)
 					target_weights_proposal = target_weights_current_gd + np.random.normal(0, self.weights_stepsize, self.target_wsize)
+					target_weights_proposal_gd = self.target.langevin_gradient(self.target_train_data, target_weights_proposal.copy(), self.sgd_depth)
 
 					wc_delta = (target_weights_current - target_weights_proposal_gd) 
 					wp_delta = (target_weights_proposal - target_weights_current_gd)
@@ -592,11 +597,10 @@ class BayesianTL(object):
 					second = -0.5 * np.sum(wp_delta * wp_delta ) / sigma_sq
 
 					difference_proposal_target =  first - second
-
-					source_eta_proposal = source_eta + np.random.normal(0, self.eta_stepsize, 1)
+					# print("first: {}  second: {} diff prop: {}".format(first, second, difference_proposal_target))
 					target_eta_proposal = target_eta + np.random.normal(0, self.eta_stepsize, 1)
 
-					target_tau_proposal = np.exp(target_eta)
+					target_tau_proposal = np.exp(target_eta_proposal)
 				
 			else:
 				if not self.args.no_transfer:
@@ -684,6 +688,8 @@ class BayesianTL(object):
 					accept, target_trf_rmse_train, target_trf_rmse_test, target_trf_likelihood, target_trf_prior = self.acceptance_probability(self.target, self.target_train_data, self.target_test_data, target_trf_weights_proposal, target_trf_tau_proposal, target_trf_likelihood, target_trf_prior, difference_proposal=difference_proposal_target_trf)
 
 					if accept:
+						if difference_proposal_target_trf != 0:
+							num_langevin_accepted += 1
 						target_trf_num_accept += 1
 						target_trf_weights_current = target_trf_weights_proposal
 						target_trf_eta = target_trf_eta_proposal
@@ -702,28 +708,40 @@ class BayesianTL(object):
 			profiler.set_description(description)
 
 		elapsed_time = BayesianTL.convert_time(time.time() - start)
-
+		print(num_langevin_accepted/num_langevin_samples)
 
 		accept_ratio_target = np.array([target_num_accept, target_trf_num_accept]) / float(self.num_samples) * 100
+		accept_ratio_target = list(map(str, accept_ratio_target.tolist()))
 		elapsed_time = time.time() - start
 
 		accept_ratio = source_num_accept / (self.num_samples * 1.0) * 100
+		accept_ratio = list(map(str, accept_ratio.tolist()))
+		langevin_percent = num_langevin_samples / (self.num_samples * 1.0) * 100
+
 		if not self.args.no_transfer:
 		    transfer_ratio = num_transfer_accepted / num_transfer_attempts * 100
 		else:
 		    transfer_ratio = 0
 
-		with open(self.directory+"/ratios.txt", 'w') as accept_ratios_file:
+		with open(self.directory+"/results.txt", 'w') as accept_ratios_file:
 			accept_ratios_file.write("sources: ")
-			for ratio in accept_ratio:
-				accept_ratios_file.write(str(ratio) + ' ')
+			accept_ratios_file.write(" ".join(accept_ratio))
+			accept_ratios_file.write("\n")
+			
 			accept_ratios_file.write("target: ")
-			for ratio in accept_ratio_target:
-				accept_ratios_file.write(str(ratio) + ' ')
+			accept_ratios_file.write(" ".join(accept_ratio_target))
+			accept_ratios_file.write("\n")
+
 			accept_ratios_file.write("transfer ratio: ")
-			accept_ratios_file.write(str(transfer_ratio) + ' ')
+			accept_ratios_file.write(str(transfer_ratio) + '\n')
+
+			accept_ratios_file.write("Langevin Percent: ")
+			accept_ratios_file.write("{:.2}\n".format(langevin_percent))
+
 			accept_ratios_file.write("Time taken: ")
 			accept_ratios_file.write(str(elapsed_time))
+			accept_ratios_file.write("\n")
+
 
 
 		# Close the files
@@ -768,18 +786,22 @@ class BayesianTL(object):
 			rmse_tes[index] = np.mean(self.source_rmse_test[int(burnin):, index])
 			rmsetest_std[index] = np.std(self.source_rmse_test[int(burnin):, index])
 
-		rmse_target_train = np.mean(self.target_rmse_train[int(burnin):])
-		rmsetarget_std_train = np.std(self.target_rmse_train[int(burnin):])
+		rmse_train_target = np.mean(self.target_rmse_train[int(burnin):])
+		rmse_train_std_target = np.std(self.target_rmse_train[int(burnin):])
 
-		rmse_target_test = np.mean(self.target_rmse_test[int(burnin):])
-		rmsetarget_std_test = np.std(self.target_rmse_test[int(burnin):])
+		rmse_test_target = np.mean(self.target_rmse_test[int(burnin):])
+		rmse_test_std_target = np.std(self.target_rmse_test[int(burnin):])
 
 
-		rmse_target_train_trf = np.mean(self.target_trf_rmse_train[int(burnin):])
-		rmsetarget_std_train_trf = np.std(self.target_trf_rmse_train[int(burnin):])
+		rmse_train_target_trf = np.mean(self.target_trf_rmse_train[int(burnin):])
+		rmse_train_std_target_trf = np.std(self.target_trf_rmse_train[int(burnin):])
 
-		rmse_target_test_trf = np.mean(self.target_trf_rmse_test[int(burnin):])
-		rmsetarget_std_test_trf = np.std(self.target_trf_rmse_test[int(burnin):])
+		rmse_test_target_trf = np.mean(self.target_trf_rmse_test[int(burnin):])
+		rmse_test_std_target_trf = np.std(self.target_trf_rmse_test[int(burnin):])
+
+		with open(self.directory + '/results.txt', 'a') as result_file:
+			result_file.write("Target-only :- Train RMSE: {:.4f} std: {:.4f} \nTest RMSE: {:.4f} std: {:.4f}\n".format(rmse_train_target, rmse_train_std_target, rmse_test_target, rmse_test_std_target))	
+			result_file.write("Target-trf :- Train RMSE: {:.4f} std: {:.4f} \nTest RMSE: {:.4f} std: {:.4f}\n".format(rmse_train_target_trf, rmse_train_std_target_trf, rmse_test_target_trf, rmse_test_std_target_trf))
 
 	def plot_rmse(self, dataset):
 		if not os.path.isdir(self.directory+'/results'):
@@ -829,18 +851,13 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Run Bayesian neural transfer learning')
 	parser.add_argument('--langevin', action='store_true', help='use langevin gradients')
 	parser.add_argument('--problem', type=int, default=0, help='constant value defining the problem to use: \n0:- Wine-Quality, 1: UJIndoorLoc, 2: Sarcos, 3: Synthetic', required=True)
-
 	parser.add_argument('--num-samples', type=int, required=False, help='total number of samples sampled by the mcmc sampler')
-
 	parser.add_argument('--transfer-only', action='store_true', help="don't sample target without transfer (default=False)")
-
 	parser.add_argument('--no-transfer', action='store_true', help='no transfer')
-
 	parser.add_argument('--langevin-ratio', type=float, default=0.1, help="the ratio of samples to use langevin gradients")
-
 	parser.add_argument('--transfer-ratio', type=float, default=0.05, help='the ratio of samples to be transfered')
-
 	parser.add_argument('--run-id', type=str, required=True)
+	parser.add_argument('--root-dir', type=str, default='/home/arpit/Dropbox (Sydney Uni)/Bayesian-neural-transfer-learning/', help='Path to root directory of repository')
 
 	args = parser.parse_args()
 	
@@ -864,34 +881,34 @@ if __name__ == '__main__':
 	#--------------------------------------------- Train for the source task -------------------------------------------
 
 	if problem == 0:
-		target_train_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-train.csv', delimiter=',')
-		target_test_data = np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=',')
+		target_train_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/WineQualityDataset/preprocess/winequality-red-train.csv'), delimiter=',')
+		target_test_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/WineQualityDataset/preprocess/winequality-red-test.csv'), delimiter=',')
 	elif problem == 1:
-		target_train_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0train.csv', delimiter=',')[:, :-2]
-		target_test_data = np.genfromtxt('../datasets/UJIndoorLoc/targetData/0test.csv', delimiter=',')[:, :-2]
+		target_train_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/UJIndoorLoc/targetData/0train.csv'), delimiter=',')[:, :-2]
+		target_test_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/UJIndoorLoc/targetData/0test.csv'), delimiter=',')[:, :-2]
 	elif problem == 2:
-		target_train_data = np.genfromtxt('../datasets/Sarcos/target_train.csv', delimiter=',')
-		target_test_data = np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=',')
+		target_train_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/Sarcos/target_train.csv'), delimiter=',')
+		target_test_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/Sarcos/target_test.csv'), delimiter=',')
 	elif problem == 3:
-		target_train_data = np.genfromtxt('../datasets/synthetic_data/target_train.csv', delimiter=',')
-		target_test_data = np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=',')
+		target_train_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/synthetic_data/target_train.csv'), delimiter=',')
+		target_test_data = np.genfromtxt(os.path.join(args.root_dir,'datasets/synthetic_data/target_test.csv'), delimiter=',')
 
 
 	train_data = []
 	test_data = []
 	for index in range(num_sources[problem]):
 		if problem == 0:
-			train_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-white-train.csv', delimiter=','))
-			test_data.append(np.genfromtxt('../datasets/WineQualityDataset/preprocess/winequality-red-test.csv', delimiter=','))
+			train_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/WineQualityDataset/preprocess/winequality-white-train.csv'), delimiter=','))
+			test_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/WineQualityDataset/preprocess/winequality-red-test.csv'), delimiter=','))
 		elif problem == 1:
-			train_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv', delimiter=',')[:, :-2])
-			test_data.append(np.genfromtxt('../datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv', delimiter=',')[:, :-2])
+			train_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/UJIndoorLoc/sourceData/'+str(index)+'train.csv'), delimiter=',')[:, :-2])
+			test_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/UJIndoorLoc/sourceData/'+str(index)+'test.csv'), delimiter=',')[:, :-2])
 		elif problem == 2:
-			train_data.append(np.genfromtxt('../datasets/Sarcos/source.csv', delimiter=','))
-			test_data.append(np.genfromtxt('../datasets/Sarcos/target_test.csv', delimiter=','))
+			train_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/Sarcos/source.csv'), delimiter=','))
+			test_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/Sarcos/target_test.csv'), delimiter=','))
 		elif problem == 3:
-			train_data.append(np.genfromtxt('../datasets/synthetic_data/source'+str(index+1)+'.csv', delimiter=','))
-			test_data.append(np.genfromtxt('../datasets/synthetic_data/target_test.csv', delimiter=','))
+			train_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/synthetic_data/source'+str(index+1)+'.csv'), delimiter=','))
+			test_data.append(np.genfromtxt(os.path.join(args.root_dir,'datasets/synthetic_data/target_test.csv'), delimiter=','))
 
 	random.seed(time.time())
 
@@ -908,4 +925,3 @@ if __name__ == '__main__':
 
 	# Plot the accuracies and rmse
 	mcmc_task.plot_rmse(problem_name)
-
